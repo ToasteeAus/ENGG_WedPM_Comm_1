@@ -48,7 +48,7 @@ void BRWiFiSetup(){
 }
 
 void BRWiFiHeartbeat(){
-  if(!IsWiFiAlive){
+  if(!IsWiFiAlive()){
     BRWiFiSetup();
   }
 }
