@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 #include "BRWiFiModule.h"
 
 void setup() {

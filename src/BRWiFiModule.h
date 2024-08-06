@@ -43,7 +43,7 @@ void BRWiFiSetup(){
     Serial.print("Connected @ ");
     Serial.print(WiFi.localIP().toString());
   } else {
-    Serial.println("Check SSID and Password as well as Network Health.");
+    Serial.println("Check SSID, Password, and Network Health.");
   }
 }
 
