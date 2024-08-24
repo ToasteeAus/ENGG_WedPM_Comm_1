@@ -1,53 +1,39 @@
 import socket
-import time
-import json
 
-class ccp:
-    JAVA_LINE_END = "\r\n"
-    SETUP_MSG = "trainInit"
-    POS = "0.1,"
-    SPEED = "0.05"
-    SAMPLE_MSG = "train,0.1,0.05"
-    
-    def __init__(self, port):
-        self.port = port
-        self.host = socket.gethostname()
-        
-        self.mcp_socket = socket.socket()
-        self.mcp_socket.connect((self.host, self.port))
-        print("Connected!")
-        
-    def setup_client(self):
-        message = ccp.SETUP_MSG + ccp.JAVA_LINE_END
-        self.mcp_socket.sendall(message.encode())
-        
-        data = self.mcp_socket.recv(1024).decode()
-        print('Data received from MCP: ' + data)
-        
-    def send_info(self):
-        message = ccp.SAMPLE_MSG + ccp.JAVA_LINE_END
-        self.mcp_socket.sendall(message.encode())
-        
-        data = self.mcp_socket.recv(1024).decode()
-        print('Data received from MCP: ' + data)
-        
-    def socket_listener(self):
-        data = self.mcp_socket.recv(1024).decode()
-        
-        if data == "STATUS":
-            message = "STATUS,0.2,0.05"
+# Define the host and port for the server
+HOST = '0.0.0.0'  # Listen on all available interfaces
+PORT = 12345       # Port to listen on
 
-    def close_socket(self):
-        self.mcp_socket.close()
-    
-    def main_logic(self):
-        self.setup_client()
-        time.sleep(3)
-        self.send_info()
-        time.sleep(5)
-        self.close_socket()
-        
+# Create a TCP socket
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-if __name__ == '__main__':
-    ccp = ccp(6666)
-    ccp.main_logic()
+# Bind the socket to the specified host and port
+server_socket.bind((HOST, PORT))
+
+# Start listening for incoming connections (max 1 connection in the queue)
+server_socket.listen(1)
+
+print(f"Server listening on {HOST}:{PORT}")
+
+# Accept a connection
+client_socket, client_address = server_socket.accept()
+print(f"Connection from {client_address}")
+
+try:
+    while True:
+        # Receive data from the client
+        data = client_socket.recv(1024).decode('utf-8')
+        if not data:
+            break
+        print(f"Received from client: {data}")
+
+        # Send a response back to the client
+        response = f"Echo: {data}"
+        client_socket.sendall(response.encode('utf-8'))
+
+finally:
+    # Close the connection with the client
+    client_socket.close()
+
+# Close the server socket
+server_socket.close()
