@@ -1,53 +1,110 @@
 import socket
-import time
 import json
+import time
+from enum import Enum
 
-class ccp:
-    JAVA_LINE_END = "\r\n"
-    SETUP_MSG = "trainInit"
-    POS = "0.1,"
-    SPEED = "0.05"
-    SAMPLE_MSG = "train,0.1,0.05"
+# CCP Scope Variables
+CCP_STATE = Enum('CCP_STATE', ['WAKE_UP', 'ESP_SETUP', 'MCP_INIT'])
+CURR_STATE = CCP_STATE.WAKE_UP
+
+HOST = '0.0.0.0'  # Listen on all available interfaces
+PORT = 3028       # Port to listen on
+
+esp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create global-ish scoped socket to reference
+esp_client_socket = None
+
+###########################################################
+def send_esp_msg(data_to_send):
+    sent_json_data = json.dumps(data_to_send)
     
-    def __init__(self, port):
-        self.port = port
-        self.host = socket.gethostname()
-        
-        self.mcp_socket = socket.socket()
-        self.mcp_socket.connect((self.host, self.port))
-        print("Connected!")
-        
-    def setup_client(self):
-        message = ccp.SETUP_MSG + ccp.JAVA_LINE_END
-        self.mcp_socket.sendall(message.encode())
-        
-        data = self.mcp_socket.recv(1024).decode()
-        print('Data received from MCP: ' + data)
-        
-    def send_info(self):
-        message = ccp.SAMPLE_MSG + ccp.JAVA_LINE_END
-        self.mcp_socket.sendall(message.encode())
-        
-        data = self.mcp_socket.recv(1024).decode()
-        print('Data received from MCP: ' + data)
-        
-    def socket_listener(self):
-        data = self.mcp_socket.recv(1024).decode()
-        
-        if data == "STATUS":
-            message = "STATUS,0.2,0.05"
+    esp_client_socket.sendall(sent_json_data.encode('utf-8'))
+    print(f"Sent to client: {sent_json_data}")
 
-    def close_socket(self):
-        self.mcp_socket.close()
+def recv_esp_msg():
+    # Receive back response from ESP32
+    data = esp_client_socket.recv(1024).decode('utf-8')
+    return_data = ""
     
-    def main_logic(self):
-        self.setup_client()
-        time.sleep(3)
-        self.send_info()
-        time.sleep(5)
-        self.close_socket()
+    if data:
+        print(f"Received from client: {data}")
+        # Attempt to parse the JSON data
         
+        try:
+            json_data = json.loads(data)
+            return_data = json.dumps(json_data)
+            
+            print(f"Returned Command: {json_data["CMD"]}")
+            
+        except json.JSONDecodeError:
+            print("Received from client, but failed to parse JSON")
+    
+    return return_data
 
+def setup_esp_socket():
+    # Bind the socket to the specified host and port
+    global esp_client_socket, esp_server_socket
+    esp_server_socket.bind((HOST, PORT))
+    server_ip = socket.gethostbyname(socket.gethostname())
+
+    # Start listening for incoming connections (max 1 connection in the queue)
+    esp_server_socket.listen(1)
+    print(f"Server listening for BR28 on {server_ip}:{PORT}")
+    
+    # Accept a connection -> HOLDS EXECUTION TIL ESP IS CONNECTED
+    esp_client_socket, client_address = esp_server_socket.accept()
+    print(f"Connection from {client_address}")
+    
+def setup_esp():
+    global esp_client_socket, CURR_STATE
+    
+    if esp_client_socket is not None:
+        setup_msg = {
+            "CMD":"SETUP"
+        }
+        
+        send_esp_msg(setup_msg)
+        
+        # Receive back response from ESP32
+        data = recv_esp_msg()
+        
+        if data["CMD"] == "SETUP_OK":
+            CURR_STATE = CCP_STATE.ESP_SETUP
+    else:
+        CURR_STATE = CCP_STATE.WAKE_UP # Forces server to reconnect if failed before and jumped ahead
+    
+def status_esp():
+    global esp_client_socket
+    
+    if esp_client_socket is not None:
+        setup_msg = {
+            "CMD":"SETUP"
+        }
+        
+        send_esp_msg(setup_msg)
+        
+        # Receive back response from ESP32
+        data = recv_esp_msg()
+        
+        if data["STATUS"] == "NORMINAL":
+            print("ESP Working as expected!")
+        
+def mainLogic():
+    # work through our state machine -> setup ESP for comms
+    try: 
+        while True:
+            match CURR_STATE:
+                case CCP_STATE.WAKE_UP:
+                    setup_esp_socket()
+                    setup_esp()
+                case _:
+                    print("We have defaulted here")
+    finally:
+        # Close the connection with the client
+        if esp_client_socket is not None:
+            esp_client_socket.close()
+        # Close the server socket
+        esp_server_socket.close()
+    
 if __name__ == '__main__':
-    ccp = ccp(6666)
-    ccp.main_logic()
+    # Execute when the module is not initialized from an import statement.
+    mainLogic()
