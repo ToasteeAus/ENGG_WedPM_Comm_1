@@ -4,8 +4,8 @@ import time
 from enum import Enum
 
 # CCP Scope Variables
-CCP_STATE = Enum('CCP_STATE', ['WAKE_UP', 'ESP_SETUP', 'MCP_INIT'])
-CURR_STATE = CCP_STATE.WAKE_UP
+ESP_STATE = Enum('ESP', ['STOP', 'FORWARD_SLOW', 'FORWARD_FAST', 'REVERSE_SLOW', 'REVERSE_FAST', 'E-STOP', 'DOOR_OPEN', 'DOOR_CLOSE', 'COLLISION'])
+CURR_ESP_STATE = ESP_STATE.STOP
 
 HOST = '0.0.0.0'  # Listen on all available interfaces
 PORT = 3028       # Port to listen on
@@ -32,8 +32,7 @@ def recv_esp_msg():
         try:
             json_data = json.loads(data)
             return_data = json.dumps(json_data)
-            
-            print(f"Returned Command: {json_data["CMD"]}")
+            print(f"Returned Data: {return_data}")
             
         except json.JSONDecodeError:
             print("Received from client, but failed to parse JSON")
@@ -90,14 +89,12 @@ def status_esp():
         
 def mainLogic():
     # work through our state machine -> setup ESP for comms
+    global CURR_STATE
     try: 
-        while True:
-            match CURR_STATE:
-                case CCP_STATE.WAKE_UP:
-                    setup_esp_socket()
-                    setup_esp()
-                case _:
-                    print("We have defaulted here")
+        setup_esp_socket()
+        setup_esp()
+        
+        # Setup Threads to handle MCP, ESP, and General Services
     finally:
         # Close the connection with the client
         if esp_client_socket is not None:
