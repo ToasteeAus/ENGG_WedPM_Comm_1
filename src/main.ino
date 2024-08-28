@@ -7,7 +7,7 @@ const char* password = "Test1234";
 
 // Server address and port
 const char* serverIP = "192.168.125.177";  // Replace with the IP address of your local python server
-const uint16_t serverPort = 12345;
+const uint16_t serverPort = 3028;
 
 void setup() {
   // Initialize Serial
