@@ -67,9 +67,9 @@ def setup_esp():
         data = recv_esp_msg()
         
         if data["CMD"] == "SETUP_OK":
-            CURR_STATE = CCP_STATE.ESP_SETUP
+            CURR_STATE = ESP_STATE.ESP_SETUP
     else:
-        CURR_STATE = CCP_STATE.WAKE_UP # Forces server to reconnect if failed before and jumped ahead
+        CURR_STATE = ESP_STATE.WAKE_UP # Forces server to reconnect if failed before and jumped ahead
     
 def status_esp():
     global esp_client_socket
