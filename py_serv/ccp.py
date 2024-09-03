@@ -50,6 +50,7 @@ def recv_esp_msg():
         CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
         CURR_BR_STATE = BR_STATE.ERROR
         return
+    
     return_data = ""
     
     if data:

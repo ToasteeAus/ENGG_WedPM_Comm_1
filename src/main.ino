@@ -7,7 +7,7 @@
 */
 
 // Pin definitions
-#define PIN_NEO_PIXEL 4
+#define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
 
 // Status LEDs
 #define NUM_PIXELS 4    // The number of LEDs in sequence
