@@ -10,7 +10,7 @@
 #define DIS_PIN 15
 #define DIR_PIN 16
 #define PWM_PIN 17
-#define PHOTORESISTOR_PIN 10
+#define PHOTORESISTOR_PIN 26
 #define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
 
 // Status LEDs
@@ -210,23 +210,33 @@ void loop() {
             replydoc["ACK"] = "NORMINAL";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "STOP"){
-            setLEDStatus(0); 
+            setLEDStatus(0);
+            runMotor(0);
+            setMotorDirection(1,1); 
             replydoc["ACK"] = "STOP_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "FORWARD_FAST"){
             setLEDStatus(1);
+            setMotorDirection(0,1);
+            runMotor(FAST_SPEED);
             replydoc["ACK"] = "FORWARD_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
             setLEDStatus(2);
+            setMotorDirection(0,1);
+            runMotor(SLOW_SPEED);
             replydoc["ACK"] = "FORWARD_SLOW_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
             setLEDStatus(3);
+            setMotorDirection(0,0);
+            runMotor(SLOW_SPEED);
             replydoc["ACK"] = "REVERSE_SLOW_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
             setLEDStatus(4);
+            setMotorDirection(0,0);
+            runMotor(FAST_SPEED);
             replydoc["ACK"] = "REVERSE_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
