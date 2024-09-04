@@ -7,6 +7,10 @@
 */
 
 // Pin definitions
+#define DIS_PIN 15
+#define DIR_PIN 16
+#define PWM_PIN 17
+#define PHOTORESISTOR_PIN 10
 #define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
 
 // Status LEDs
@@ -20,6 +24,10 @@ const char* password = "Test1234";
 // Server address and port
 const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
+
+#define FAST_SPEED 255
+#define SLOW_SPEED 150
+int atStation = 0;
 
 void setupWifi(){
   // Connect to Wi-Fi
@@ -112,6 +120,57 @@ void setLEDStatus(int status){
   NeoPixel.show();
 }
 
+void setMotorDirection(int direction, int disable){
+  if(disable==1){
+    digitalWrite(DIS_PIN, HIGH);
+  } else {
+    digitalWrite(DIS_PIN, LOW);
+  }
+
+  if(direction==1){
+    digitalWrite(DIR_PIN, HIGH);
+  } else {
+    digitalWrite(DIR_PIN, LOW);
+  }
+}
+
+void runMotor(int speed){
+  analogWrite(PWM_PIN, speed);
+}
+
+void softAcceleration(int currSpeed, int newSpeed){
+  //TODO add function to smooth out acceleration
+}
+
+void readPhotoresistor(WiFiClient &client){
+  int value = analogRead(PHOTORESISTOR_PIN);
+
+  if(value > 450){
+    runMotor(0);
+    setMotorDirection(1, 1);
+    /*if(atStation == 0){
+        if(client.connected() && client.available()){
+          StaticJsonDocument<200> messageDoc;
+          messageDoc["UPDATE"] = "EMERGENCY_STOP";
+          sendToCCP(messageDoc, client);
+          messageDoc.clear();
+        }
+    }
+    */
+    if(atStation == 1){
+      doorControl(1);
+    }
+  }
+}
+
+void doorControl(int direction){ // 1 for open, -1 for close
+  //TODO add door open/close function
+}
+
+void readUltrasonic(){
+  
+}
+
 void setup() {
   // Initialize Serial
   Serial.begin(115200);
@@ -119,6 +178,10 @@ void setup() {
   NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
   NeoPixel.show();
   NeoPixel.setBrightness(50); // so they don't blind us
+  // set motor pins to outputs
+  pinMode(DIS_PIN, OUTPUT); 
+  pinMode(DIR_PIN, OUTPUT);
+  pinMode(PWM_PIN, OUTPUT);
   setupWifi();
 }
 
