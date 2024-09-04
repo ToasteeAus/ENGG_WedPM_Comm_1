@@ -255,20 +255,6 @@ def error_handler():
             print("This error is extraordinarily bad")
             sys.exit()
 
-def testing_logic():
-    global CURR_BR_STATE
-    while CURR_BR_STATE == BR_STATE.OPERATIONAL:
-        esp_stop()
-        time.sleep(5)
-        esp_forward_fast()
-        time.sleep(5)
-        esp_forward_slow()
-        time.sleep(5)
-        esp_reverse_slow()
-        time.sleep(5)
-        esp_reverse_fast()
-        time.sleep(5)
-
 def main_logic():
     # work through our state machine
     global CURR_BR_STATE, CURR_ESP_STATE
