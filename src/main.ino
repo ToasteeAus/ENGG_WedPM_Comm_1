@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <Servo.h>
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 
@@ -11,8 +12,12 @@
 #define DIS_PIN 15
 #define DIR_PIN 16
 #define PWM_PIN 17
+#define DOOR_PIN 26 
 #define PHOTORESISTOR_PIN 26
 #define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
+
+// Door
+Servo door;
 
 // Status LEDs
 #define NUM_PIXELS 4    // The number of LEDs in sequence
@@ -164,8 +169,17 @@ void readPhotoresistor(WiFiClient &client){
   }
 }
 
-void doorControl(int direction){ // 1 for open, -1 for close
-  //TODO add door open/close function
+void doorControl(int direction) {
+  if (direction == 1) { // door open; moves in clockwise direction
+    door.write(45);
+    delay(5000); // rotates for 5 seconds
+    door.write(90); // stops
+    } 
+  else if (direction == -1) { // door close; moves in anticlockwise direction
+    door.write(135);
+    delay(5000); // rotates for 5 seconds
+    door.write(90); // stops
+    }
 }
 
 void readUltrasonic(){
@@ -180,6 +194,7 @@ void setup() {
   NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
   NeoPixel.show();
   NeoPixel.setBrightness(50); // so they don't blind us
+  door.attach(DOOR_PIN); // for controlling the door operations
   // set motor pins to outputs
   pinMode(DIS_PIN, OUTPUT); 
   pinMode(DIR_PIN, OUTPUT);
@@ -245,10 +260,12 @@ void loop() {
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
             setLEDStatus(5);
+            doorControl(1);
             replydoc["ACK"] = "DOOR_OPEN_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_CLOSE"){
             setLEDStatus(6);
+            doorControl(-1);
             replydoc["ACK"] = "DOOR_CLOSE_OK";
             sendToCCP(replydoc, client);
           }
