@@ -272,12 +272,48 @@ def testing_logic():
 def main_logic():
     # work through our state machine
     global CURR_BR_STATE, CURR_ESP_STATE
+    print("Establishing the BladeRunner Command Line Interaction Tool v0.1")
+    print("Copyright T5C1 @ 2024")
+    print("Connection to BR28 being established")
     setup_logging()
     setup_esp_socket()
     set_br_state(BR_STATE.OPERATIONAL)
     
     while CURR_BR_STATE != BR_STATE.SHUTDOWN:
-        testing_logic()
+        human_control = input("Input your required BladeRunner Command: ").lower()
+        match (human_control):
+            case "forward-fast" | "forwardfast" | "forward":
+                esp_forward_fast()
+            case "forward-slow" | "forwardslow":
+                esp_forward_slow()
+            case "reverse-fast" | "reversefast" | "reverse":
+                esp_reverse_fast()
+            case "reverse-slow" | "reverseslow":
+                esp_reverse_slow()
+            case "stop" | "e-stop":
+                esp_stop()
+            case "quit" | "exit":
+                esp_stop()
+                shutdown_esp_socket()
+                sys.exit()
+            case "help" | "commands":
+                print("List of available commands:\n")
+                print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("reverse-fast:\nreversefast:\reverse: -> move BladeRunner reverse, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool")
+                print("help:\ncommands: -> exits from BladeRunner Command Line Interaction Tool")
+            case _:
+                print("Unknown command, available commands:\n")
+                print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("reverse-fast:\nreversefast:\reverse: -> move BladeRunner reverse, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool")
+                print("help:\ncommands: -> exits from BladeRunner Command Line Interaction Tool")
     
     shutdown_esp_socket()
     
