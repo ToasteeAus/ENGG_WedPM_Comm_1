@@ -121,7 +121,7 @@ void setLEDStatus(int status){
   NeoPixel.show();
 }
 
-void setMotorDirection(int direction, int disable){
+void setMotorDirection(int disable, int direction){
   if(disable==1){
     digitalWrite(DIS_PIN, HIGH);
   } else {
