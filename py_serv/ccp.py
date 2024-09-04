@@ -433,13 +433,21 @@ def remote_cli_test():
     while CURR_BR_STATE != BR_STATE.SHUTDOWN:
         human_control = input("br28> ").lower()
         match (human_control):
-            case "quit" | "exit":
+            case "quit" | "exit" | "q":
                 # Behaviour note:
                 # If attempting to quit in CLI mode, the program requires the ESP32 to be connected to safely disconnect, if it fails to do so,
                 # the program will err and hang
                 esp_stop()
                 shutdown_esp_socket()
                 sys.exit()
+            case "forcequit" | "fq":
+                # Behaviour note:
+                # If the physical BladeRunner is not immobilised, it may continue to act on the last command without connection pending behaviour change
+                # Only to be called if you do not care about the ESP being in a weird state
+                confirm = input("NOTE: This command MAY leave the BladeRunner in a non-standard state.\nIt is the responsibility of the operator to ensure safety.\nNoting this, do you still wish to continue? (y/n) ")
+                if confirm == "y" or confirm == "yes":
+                    shutdown_esp_socket()
+                    sys.exit()
             case "forward-fast" | "forwardfast" | "forward":
                 esp_forward_fast()
             case "forward-slow" | "forwardslow":
@@ -463,7 +471,8 @@ def remote_cli_test():
                 print("stop:\ne-stop: -> stops BladeRunner\n")
                 print("door-open: -> opens BladeRunner doors\n")
                 print("door-close: -> closes BladeRunner doors\n")
-                print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
+                print("q:\nquit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
+                print("fq:\nforcequit: -> forcefully exits from BladeRunner Command Line Interaction Tool\n[This command is unstable.]\n")
                 print("help:\ncommands: -> lists all available commands from BladeRunner Command Line Interaction Tool")
             case _:
                 print("Unknown command, available commands:\n")
@@ -475,6 +484,7 @@ def remote_cli_test():
                 print("door-open: -> opens BladeRunner doors\n")
                 print("door-close: -> closes BladeRunner doors\n")
                 print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
+                print("fq:\nforcequit: -> forcefully exits from BladeRunner Command Line Interaction Tool\n[This command is unstable.]\n")
                 print("help:\ncommands: -> lists all available commands from BladeRunner Command Line Interaction Tool")
     
     shutdown_esp_socket()
