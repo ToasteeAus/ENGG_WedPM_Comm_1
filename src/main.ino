@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+#include <Wire.h>
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
@@ -168,7 +169,8 @@ void doorControl(int direction){ // 1 for open, -1 for close
 }
 
 void readUltrasonic(){
-  
+  //Wire.requestFrom(0x57, 32);
+  //long dist = Wire.read();
 }
 
 void setup() {
@@ -182,6 +184,7 @@ void setup() {
   pinMode(DIS_PIN, OUTPUT); 
   pinMode(DIR_PIN, OUTPUT);
   pinMode(PWM_PIN, OUTPUT);
+  //Wire.begin();
   setupWifi();
 }
 
@@ -197,6 +200,7 @@ void loop() {
     // Read data from the server
     while (client.connected()) {
       if (client.available()) {
+        readPhotoresistor(client);
         // Read info from Python Server
         readFromCCP(staticJsonResponse, client);
 
@@ -257,6 +261,8 @@ void loop() {
       staticJsonResponse.clear();
     }
     client.stop();
+    runMotor(0);
+    setMotorDirection(1, 1);
     Serial.println("Disconnected from server");
   } else {
     Serial.println("Connection to server failed");
