@@ -282,6 +282,10 @@ def main_logic():
                 esp_reverse_slow()
             case "stop" | "e-stop":
                 esp_stop()
+            case "door-open":
+                esp_door_open()
+            case "door-close":
+                esp_door_close()
             case "help" | "commands":
                 print("List of available commands:\n")
                 print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
@@ -289,6 +293,8 @@ def main_logic():
                 print("reverse-fast:\nreversefast:\reverse: -> move BladeRunner reverse, fast\n")
                 print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
                 print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("door-open: -> opens BladeRunner doors\n")
+                print("door-close: -> closes BladeRunner doors\n")
                 print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool")
                 print("help:\ncommands: -> exits from BladeRunner Command Line Interaction Tool")
             case _:
@@ -298,6 +304,8 @@ def main_logic():
                 print("reverse-fast:\nreversefast:\reverse: -> move BladeRunner reverse, fast\n")
                 print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
                 print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("door-open: -> opens BladeRunner doors\n")
+                print("door-close: -> closes BladeRunner doors\n")
                 print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool")
                 print("help:\ncommands: -> exits from BladeRunner Command Line Interaction Tool")
     
