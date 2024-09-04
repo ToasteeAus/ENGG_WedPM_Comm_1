@@ -1,11 +1,6 @@
 import socket, json, sys, time, logging, os
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
-
-# CCP_PORT ALLOCATION
-CCP_PORT = 3028
-BUFFER_SIZE = 1024
-CLIENT_ID = "BR28"
 
 # CCP States
 BR_STATE = Enum('BR_STATE', ['CCP_OFFLINE','ESP_SETUP', 'THREADS_SETUP', 'MCP_SETUP', 'OPERATIONAL', 'ERROR', 'SHUTDOWN'])
@@ -14,25 +9,17 @@ CURR_BR_STATE = BR_STATE.CCP_OFFLINE
 CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
 
 # ESP Socket Server
-CCP_TCP_SERVER = ('10.20.30.128', CCP_PORT)  # Listen on all available interfaces
+HOST = '0.0.0.0'  # Listen on all available interfaces
+PORT = 3028       # Port to listen on
+
 esp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create global-ish scoped socket to reference
 esp_client_socket = None
 
-# CCP UDP Server
-CCP_UDP_SERVER = ("10.20.30.1", CCP_PORT)
-mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-mcp_client_socket.bind(CCP_UDP_SERVER)
-
 # MCP Socket Server
-MCP_SERVER = ("10.20.30.1", 2001)
-
-
+# filler for now
 
 
 ###########################################################
-def get_current_timestamp():
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00Z')
-
 def set_br_state(new_state):
     global BR_STATE, CURR_BR_STATE
     CURR_BR_STATE = new_state
@@ -57,7 +44,7 @@ def recv_esp_msg():
     global CURR_ESP_STATE, CURR_BR_STATE
     # Receive back response from ESP32
     try:
-        data = esp_client_socket.recv(BUFFER_SIZE).decode('utf-8') # for rev 1.0 we could implement a 4 byte size system ahead of json data
+        data = esp_client_socket.recv(1024).decode('utf-8') # for rev 1.0 we could implement a 4 byte size system ahead of json data
     except TimeoutError:
         logging.critical("ESP connection timed out")
         CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
@@ -86,7 +73,7 @@ def setup_esp_socket():
     esp_client_socket = None
     
     esp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    esp_server_socket.bind((HOST, CCP_PORT))
+    esp_server_socket.bind((HOST, PORT))
     server_ip = socket.gethostbyname(socket.gethostname())
     
     # Start listening for incoming connections (max 1 connection in the queue)
@@ -94,9 +81,9 @@ def setup_esp_socket():
     logging.debug("ESP Socket listening")
     if (CURR_BR_STATE == BR_STATE.SHUTDOWN):
         logging.warning("Attempting ESP re-connection")
-        print(f"Attempting to reconnect to BR28 on {server_ip}:{CCP_PORT}")
+        print(f"Attempting to reconnect to BR28 on {server_ip}:{PORT}")
     else: 
-        print(f"Server listening for BR28 on {server_ip}:{CCP_PORT}")
+        print(f"Server listening for BR28 on {server_ip}:{PORT}")
     
     # Accept a connection -> HOLDS EXECUTION TIL ESP IS CONNECTED
     esp_client_socket, client_address = esp_server_socket.accept()
@@ -128,31 +115,7 @@ def create_threads():
     set_br_state(BR_STATE.MCP_SETUP)
 
 def setup_mcp_socket():
-    # Initialisation message for MCP
-    init_json = {
-        "client_type": "ccp",
-        "message": "CCIN",
-        "client_id": CLIENT_ID,
-        "timestamp": get_current_timestamp()
-    }
-    
-    # Send message to MCP
-    mcp_client_socket.sendto(json.dumps(init_json).encode('utf-8'), MCP_SERVER)
-    logging.info("Initialisation message sent to MCP.")
-    
-    mcp_ack = False
-    
-    while mcp_ack == False:
-        recv_mcp_data = mcp_client_socket.recvfrom(BUFFER_SIZE)
-        mcp_data_decoded = recv_mcp_data[0].decode()
-        
-        # Parse JSON
-        json_data = json.loads(mcp_data_decoded)
-        if json_data.get('client_id') == CLIENT_ID:  # Check if CLIENT_ID matches, only messages intended for BR28 are accepted.
-            if json_data['message'] == "AKIN":
-                logging.info("Received connection confirmation from MCP: %s", json_data)  # Debug statement. MCP connection successful.
-                mcp_ack = True
-
+    logging.debug("Setup MCP Socket Stub Reached")
     set_br_state(BR_STATE.OPERATIONAL)
 
 def shutdown_esp_socket():
@@ -273,7 +236,7 @@ def setup_logging():
 
     now = datetime.now()
     date_time = now.strftime("%d-%m-%Y_%H-%M-%S")
-    log_file_name = date_time + "_log.log"
+    log_file_name = "testlog_" + date_time + "_log.log"
     
         
     log_file_path = os.path.join("logs", log_file_name)
@@ -292,115 +255,30 @@ def error_handler():
             print("This error is extraordinarily bad")
             sys.exit()
 
-def mcp_status_creator():
-    global CURR_BR_STATE, CURR_ESP_STATE
-    # ESP_STATE = Enum('ESP_STATE', ['ESP_OFFLINE', 'STOP', 'FORWARD_SLOW', 'FORWARD_FAST', 'REVERSE_SLOW', 'REVERSE_FAST', 'E_STOP', 'DOOR_OPEN', 'DOOR_CLOSE', 'COLLISION'])
-
-    status = ""
-    match (CURR_BR_STATE):
-        case BR_STATE.SHUTDOWN | BR_STATE.CCP_OFFLINE | BR_STATE.ESP_SETUP | BR_STATE.MCP_SETUP | BR_STATE.THREADS_SETUP:
-            status = "OFF"
-        case BR_STATE.OPERATIONAL:
-            match (CURR_ESP_STATE):
-                case ESP_STATE.ESP_OFFLINE:
-                    status = "ERR"
-                case ESP_STATE.STOP:
-                    status = "STOPPED"
-                case ESP_STATE.FORWARD_FAST | ESP_STATE.FORWARD_SLOW | ESP_STATE.REVERSE_FAST | ESP_STATE.REVERSE_SLOW:
-                    status = "STARTED"
-                case ESP_STATE.COLLISION:
-                    status = "CRASH"
-                case _:
-                    status = "ON"
-        case _:
-            status = "ERR"
-
-    status_msg = {
-                "client_type": "ccp",
-                "message": "STAT",
-                "client_id": CLIENT_ID,
-                "timestamp": get_current_timestamp(),
-                "status": status 
-            }
-    
-    return status_msg
-
-def decode_mcp_request():
-    test_client_id = 0
-    returned_json_data = None
-    
-    while test_client_id != CLIENT_ID:
-        recv_mcp_data = mcp_client_socket.recvfrom(BUFFER_SIZE)
-        mcp_data_decoded = recv_mcp_data[0].decode()
-        
-        # Parse JSON
-        json_data = json.loads(mcp_data_decoded)
-        if json_data.get('client_id') == CLIENT_ID:  # Check if CLIENT_ID matches, only messages intended for BR28 are accepted.
-            returned_json_data = json_data
-            test_client_id = CLIENT_ID
-    
-    match (returned_json_data['message']):
-        case "STAT":
-            logging.debug("Status request received.")  # Debug statement.
-            status_msg = mcp_status_creator()
-
-            mcp_client_socket.sendto(json.dumps(status_msg).encode('utf-8'), MCP_SERVER)
-            logging.info("Sent status response to MCP: %s", status_msg) # Debug statement
-        case "EXEC":
-            action = json_data.get('action', '')
-            logging.debug("Received EXEC command to perform action: %s", action)
-            
-            match(action):
-                case "SLOW":
-                    esp_forward_slow()
-                case "FAST":
-                    esp_forward_fast()
-                case "STOP":
-                    esp_stop()
-                case _:
-                    logging.warning("Unknown EXEC command specified by MCP: %s", action)
-        case "DOOR":
-            action = json_data.get('action', '')
-            logging.debug("Received EXEC command to perform action: %s", action)
-            
-            match(action):
-                case "OPEN":
-                    esp_door_open()
-                case "CLOSE":
-                    esp_door_close()
-                case _:
-                    logging.warning("Unknown DOOR command specified by MCP: %s", action)
-
-def operational_logic():
+def testing_logic():
     global CURR_BR_STATE
-    # This will handle effectively all other ESP comms here and dealing with MCP
-    # this will become the workhorse whilst our system is operational
     while CURR_BR_STATE == BR_STATE.OPERATIONAL:
-        # Insert MCP communication handling here:
-        # once communication has been dealt with, we will result with our stand-in for MCP command
-        decode_mcp_request()
+        esp_stop()
+        time.sleep(1)
+        esp_forward_fast()
+        time.sleep(1)
+        esp_forward_slow()
+        time.sleep(1)
+        esp_reverse_slow()
+        time.sleep(1)
+        esp_reverse_fast()
+        time.sleep(1)
 
 def main_logic():
     # work through our state machine
     global CURR_BR_STATE, CURR_ESP_STATE
+    setup_logging()
+    setup_esp_socket()
+    set_br_state(BR_STATE.OPERATIONAL)
+    
     while CURR_BR_STATE != BR_STATE.SHUTDOWN:
-        match (CURR_BR_STATE):
-            case BR_STATE.CCP_OFFLINE:
-                setup_logging()
-                setup_esp_socket()
-            case BR_STATE.ESP_SETUP:
-                setup_esp()
-            case BR_STATE.THREADS_SETUP:
-                create_threads()
-            case BR_STATE.MCP_SETUP:
-                setup_mcp_socket()
-            case BR_STATE.OPERATIONAL:
-                operational_logic()
-            case BR_STATE.ERROR:
-                error_handler()
-            case _:
-                logging.debug("reached default case within main_logic")
-    # in the case where we want to shutdown, we do it here
+        testing_logic()
+    
     shutdown_esp_socket()
     
 if __name__ == '__main__':

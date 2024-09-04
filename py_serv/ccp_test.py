@@ -2,45 +2,46 @@ import socket
 import json
 from datetime import datetime, timezone
 
-serverAddressPort = ("127.0.0.1", 20001)
-localPort = 20002
+CCP_PORT = 3028
+MCP_SERVER = ("10.20.30.1", 2001)
+CCP_UDP_SERVER = ("10.20.30.1", CCP_PORT)
 BUFFER_SIZE = 1024
 
 # Notes:
 # Have not implemented anything to resolve losing connection to MCP. (What happens if we stop receiving status requests?)
 
 # Datagram socket, used for UDP connection.
-ccp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-ccp_client_socket.bind(("127.0.0.1", localPort))
+mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+mcp_client_socket.bind(CCP_UDP_SERVER)
 
 def get_current_timestamp():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00Z')
 
 current_action = "ON" # sets current action to on
-client_id = "BR28"
+CLIENT_ID = "BR28"
 
 # Initialisation message for MCP
 initialise = {
     "client_type": "ccp",
     "message": "CCIN",
-    "client_id": client_id,
+    "client_id": CLIENT_ID,
     "timestamp": get_current_timestamp()
 }
 
 # Send message to MCP
-ccp_client_socket.sendto(json.dumps(initialise).encode('utf-8'), serverAddressPort)
+mcp_client_socket.sendto(json.dumps(initialise).encode('utf-8'), MCP_SERVER)
 print("Initialisation message sent to MCP.")
 
 # Main loop to continuously listen for messages from MCP
 while True:
     try:
         # Receive message from MCP
-        msgFromMCP = ccp_client_socket.recvfrom(BUFFER_SIZE)
+        msgFromMCP = mcp_client_socket.recvfrom(BUFFER_SIZE)
         decodedMessage = msgFromMCP[0].decode()
         
         # Parse JSON
         jsonData = json.loads(decodedMessage)
-        if jsonData.get('client_id') == "BR28":  # Check if client_id matches, only messages intended for BR28 are accepted.
+        if jsonData.get('client_id') == "BR28":  # Check if CLIENT_ID matches, only messages intended for BR28 are accepted.
             
             if jsonData['message'] == "AKIN":
                 print(f"Received connection confirmation from MCP: {jsonData}")  # Debug statement. MCP connection successful.
@@ -54,7 +55,7 @@ while True:
                     "timestamp": get_current_timestamp(),
                     "status": current_action 
                 }
-                ccp_client_socket.sendto(json.dumps(status_msg).encode('utf-8'), serverAddressPort)
+                mcp_client_socket.sendto(json.dumps(status_msg).encode('utf-8'), MCP_SERVER)
                 print(f"Sent status response to MCP: {status_msg}") # Debug statement
 
             elif jsonData['message'] == "EXEC":
