@@ -4,16 +4,17 @@ from datetime import datetime, timezone
 import time
 import threading
 
-IP = "127.0.0.1"
-PORT = 20001
+IP = "0.0.0.0"
+PORT = 3001
 BUFFER_SIZE = 1024
 
 # Datagram socket, used for UDP connection.
 mcp_server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 mcp_server_socket.bind((IP, PORT))
+server_ip = socket.gethostbyname(socket.gethostname())
 
-print("MCP test server running")
+print(f"MCP test server running on: {server_ip}:{PORT}")
 
 client_id = None
 ccp_initialised = False
