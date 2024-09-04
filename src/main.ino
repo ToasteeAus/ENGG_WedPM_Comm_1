@@ -18,7 +18,7 @@ const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.233";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 void setupWifi(){
