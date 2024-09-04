@@ -1,13 +1,23 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
+#include <Wire.h>
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
 */
 
 // Pin definitions
+#define DIS_PIN 15
+#define DIR_PIN 16
+#define PWM_PIN 17
+#define DOOR_PIN 26 
+#define PHOTORESISTOR_PIN 26
 #define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
+
+// Door
+Servo door;
 
 // Status LEDs
 #define NUM_PIXELS 4    // The number of LEDs in sequence
@@ -20,6 +30,10 @@ const char* password = "Test1234";
 // Server address and port
 const char* serverIP = "192.168.212.233";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
+
+#define FAST_SPEED 255
+#define SLOW_SPEED 150
+int atStation = 0;
 
 void setupWifi(){
   // Connect to Wi-Fi
@@ -112,6 +126,67 @@ void setLEDStatus(int status){
   NeoPixel.show();
 }
 
+void setMotorDirection(int disable, int direction){
+  if(disable==1){
+    digitalWrite(DIS_PIN, HIGH);
+  } else {
+    digitalWrite(DIS_PIN, LOW);
+  }
+
+  if(direction==1){
+    digitalWrite(DIR_PIN, HIGH);
+  } else {
+    digitalWrite(DIR_PIN, LOW);
+  }
+}
+
+void runMotor(int speed){
+  analogWrite(PWM_PIN, speed);
+}
+
+void softAcceleration(int currSpeed, int newSpeed){
+  //TODO add function to smooth out acceleration
+}
+
+void readPhotoresistor(WiFiClient &client){
+  int value = analogRead(PHOTORESISTOR_PIN);
+
+  if(value > 450){
+    runMotor(0);
+    setMotorDirection(1, 1);
+    /*if(atStation == 0){
+        if(client.connected() && client.available()){
+          StaticJsonDocument<200> messageDoc;
+          messageDoc["UPDATE"] = "EMERGENCY_STOP";
+          sendToCCP(messageDoc, client);
+          messageDoc.clear();
+        }
+    }
+    */
+    if(atStation == 1){
+      doorControl(1);
+    }
+  }
+}
+
+void doorControl(int direction) {
+  if (direction == 1) { // door open; moves in clockwise direction
+    door.write(45);
+    delay(5000); // rotates for 5 seconds
+    door.write(90); // stops
+    } 
+  else if (direction == -1) { // door close; moves in anticlockwise direction
+    door.write(135);
+    delay(5000); // rotates for 5 seconds
+    door.write(90); // stops
+    }
+}
+
+void readUltrasonic(){
+  //Wire.requestFrom(0x57, 32);
+  //long dist = Wire.read();
+}
+
 void setup() {
   // Initialize Serial
   Serial.begin(115200);
@@ -119,6 +194,12 @@ void setup() {
   NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
   NeoPixel.show();
   NeoPixel.setBrightness(50); // so they don't blind us
+  door.attach(DOOR_PIN); // for controlling the door operations
+  // set motor pins to outputs
+  pinMode(DIS_PIN, OUTPUT); 
+  pinMode(DIR_PIN, OUTPUT);
+  pinMode(PWM_PIN, OUTPUT);
+  //Wire.begin();
   setupWifi();
 }
 
@@ -134,6 +215,7 @@ void loop() {
     // Read data from the server
     while (client.connected()) {
       if (client.available()) {
+        readPhotoresistor(client);
         // Read info from Python Server
         readFromCCP(staticJsonResponse, client);
 
@@ -147,31 +229,43 @@ void loop() {
             replydoc["ACK"] = "NORMINAL";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "STOP"){
-            setLEDStatus(0); 
+            setLEDStatus(0);
+            runMotor(0);
+            setMotorDirection(1,1); 
             replydoc["ACK"] = "STOP_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "FORWARD_FAST"){
             setLEDStatus(1);
+            setMotorDirection(0,1);
+            runMotor(FAST_SPEED);
             replydoc["ACK"] = "FORWARD_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
             setLEDStatus(2);
+            setMotorDirection(0,1);
+            runMotor(SLOW_SPEED);
             replydoc["ACK"] = "FORWARD_SLOW_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
             setLEDStatus(3);
+            setMotorDirection(0,0);
+            runMotor(SLOW_SPEED);
             replydoc["ACK"] = "REVERSE_SLOW_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
             setLEDStatus(4);
+            setMotorDirection(0,0);
+            runMotor(FAST_SPEED);
             replydoc["ACK"] = "REVERSE_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
             setLEDStatus(5);
+            doorControl(1);
             replydoc["ACK"] = "DOOR_OPEN_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_CLOSE"){
             setLEDStatus(6);
+            doorControl(-1);
             replydoc["ACK"] = "DOOR_CLOSE_OK";
             sendToCCP(replydoc, client);
           }
@@ -184,6 +278,8 @@ void loop() {
       staticJsonResponse.clear();
     }
     client.stop();
+    runMotor(0);
+    setMotorDirection(1, 1);
     Serial.println("Disconnected from server");
   } else {
     Serial.println("Connection to server failed");
