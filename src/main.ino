@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 /*
-    CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
+  CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
 */
 
 // Pin definitions
@@ -22,7 +22,7 @@ const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.233";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 #define FAST_SPEED 255
@@ -217,9 +217,17 @@ void loop() {
             setLEDStatus(1);
             replydoc["ACK"] = "FORWARD_FAST_OK";
             sendToCCP(replydoc, client);
+          } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
+            setLEDStatus(2);
+            replydoc["ACK"] = "FORWARD_SLOW_OK";
+            sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
             setLEDStatus(3);
             replydoc["ACK"] = "REVERSE_SLOW_OK";
+            sendToCCP(replydoc, client);
+          } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
+            setLEDStatus(4);
+            replydoc["ACK"] = "REVERSE_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
             setLEDStatus(5);
