@@ -1,6 +1,6 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
-#include <Servo.h>
+#include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 
