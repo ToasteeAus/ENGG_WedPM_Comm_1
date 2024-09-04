@@ -72,14 +72,14 @@ def setup_esp_socket():
     esp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # reset global scoped references
     esp_client_socket = None
     
+    esp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     esp_server_socket.bind((HOST, PORT))
     server_ip = socket.gethostbyname(socket.gethostname())
-
+    
     # Start listening for incoming connections (max 1 connection in the queue)
     esp_server_socket.listen(1)
     logging.debug("ESP Socket listening")
     if (CURR_BR_STATE == BR_STATE.SHUTDOWN):
-        setup_logging() # Hopefully this will work to restart the logging in a new file
         logging.warning("Attempting ESP re-connection")
         print(f"Attempting to reconnect to BR28 on {server_ip}:{PORT}")
     else: 
@@ -240,7 +240,6 @@ def setup_logging():
     
         
     log_file_path = os.path.join("logs", log_file_name)
-    
     logging.basicConfig(filename=log_file_path, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     logging.info('Starting CCP operations')
 
