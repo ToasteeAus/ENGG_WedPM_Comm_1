@@ -4,7 +4,7 @@ from enum import Enum
 
 # CCP States
 BR_STATE = Enum('BR_STATE', ['CCP_OFFLINE','ESP_SETUP', 'THREADS_SETUP', 'MCP_SETUP', 'OPERATIONAL', 'ERROR', 'SHUTDOWN'])
-ESP_STATE = Enum('ESP_STATE', ['ESP_OFFLINE', 'STOP', 'FORWARD_SLOW', 'FORWARD_FAST', 'REVERSE_SLOW', 'REVERSE_FAST', 'E-STOP', 'DOOR_OPEN', 'DOOR_CLOSE', 'COLLISION'])
+ESP_STATE = Enum('ESP_STATE', ['ESP_OFFLINE', 'STOP', 'FORWARD_SLOW', 'FORWARD_FAST', 'REVERSE_SLOW', 'REVERSE_FAST', 'E_STOP', 'DOOR_OPEN', 'DOOR_CLOSE', 'COLLISION'])
 CURR_BR_STATE = BR_STATE.CCP_OFFLINE
 CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
 
@@ -79,6 +79,7 @@ def setup_esp_socket():
     esp_server_socket.listen(1)
     logging.debug("ESP Socket listening")
     if (CURR_BR_STATE == BR_STATE.SHUTDOWN):
+        setup_logging() # Hopefully this will work to restart the logging in a new file
         logging.warning("Attempting ESP re-connection")
         print(f"Attempting to reconnect to BR28 on {server_ip}:{PORT}")
     else: 
@@ -155,6 +156,20 @@ def esp_forward_fast():
         if data["ACK"] == "FORWARD_FAST_OK":
             logging.info("ESP is moving forward fast OK!")
             set_esp_state(ESP_STATE.FORWARD_FAST)
+
+def esp_forward_slow():
+    setup_msg = {
+        "CMD":"FORWARD_SLOW"
+    }
+    
+    send_esp_msg(setup_msg)
+    
+    # Receive back response from ESP32
+    data = recv_esp_msg()
+    if data != None:
+        if data["ACK"] == "FORWARD_SLOW_OK":
+            logging.info("ESP is moving forward slow OK!")
+            set_esp_state(ESP_STATE.FORWARD_SLOW)
         
 def esp_reverse_slow():
     setup_msg = {
@@ -169,6 +184,20 @@ def esp_reverse_slow():
         if data["ACK"] == "REVERSE_SLOW_OK":
             logging.info("ESP is reversing slow OK!")
             set_esp_state(ESP_STATE.REVERSE_SLOW)
+            
+def esp_reverse_fast():
+    setup_msg = {
+        "CMD":"REVERSE_FAST"
+    }
+    
+    send_esp_msg(setup_msg)
+    
+    # Receive back response from ESP32
+    data = recv_esp_msg()
+    if data != None:
+        if data["ACK"] == "REVERSE_FAST_OK":
+            logging.info("ESP is reversing fast OK!")
+            set_esp_state(ESP_STATE.REVERSE_FAST)
         
 def esp_door_open():
     setup_msg = {
@@ -235,13 +264,20 @@ def operational_logic():
     while CURR_BR_STATE == BR_STATE.OPERATIONAL:
         # Insert MCP communication handling here:
         # once communication has been dealt with, we will result with our stand-in for MCP command
+        
         match (curr_command):
+            case ESP_STATE.E_STOP:
+                esp_stop() # Python weirdness, must have these two split
             case ESP_STATE.STOP:
                 esp_stop()
             case ESP_STATE.FORWARD_FAST:
                 esp_forward_fast()
+            case ESP_STATE.FORWARD_SLOW:
+                esp_forward_slow()
             case ESP_STATE.REVERSE_SLOW:
                 esp_reverse_slow()
+            case ESP_STATE.REVERSE_FAST:
+                esp_reverse_fast()
             case ESP_STATE.DOOR_OPEN:
                 esp_door_open()
             case ESP_STATE.DOOR_CLOSE:

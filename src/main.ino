@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 /*
-    CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
+  CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
 */
 
 // Pin definitions
@@ -154,9 +154,17 @@ void loop() {
             setLEDStatus(1);
             replydoc["ACK"] = "FORWARD_FAST_OK";
             sendToCCP(replydoc, client);
+          } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
+            setLEDStatus(2);
+            replydoc["ACK"] = "FORWARD_SLOW_OK";
+            sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
             setLEDStatus(3);
             replydoc["ACK"] = "REVERSE_SLOW_OK";
+            sendToCCP(replydoc, client);
+          } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
+            setLEDStatus(4);
+            replydoc["ACK"] = "REVERSE_FAST_OK";
             sendToCCP(replydoc, client);
           } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
             setLEDStatus(5);
