@@ -282,6 +282,10 @@ def main_logic():
     while CURR_BR_STATE != BR_STATE.SHUTDOWN:
         human_control = input("Input your required BladeRunner Command: ").lower()
         match (human_control):
+            case "quit" | "exit":
+                esp_stop()
+                shutdown_esp_socket()
+                sys.exit()
             case "forward-fast" | "forwardfast" | "forward":
                 esp_forward_fast()
             case "forward-slow" | "forwardslow":
@@ -292,10 +296,6 @@ def main_logic():
                 esp_reverse_slow()
             case "stop" | "e-stop":
                 esp_stop()
-            case "quit" | "exit":
-                esp_stop()
-                shutdown_esp_socket()
-                sys.exit()
             case "help" | "commands":
                 print("List of available commands:\n")
                 print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
