@@ -2,6 +2,9 @@ import socket, json, sys, time, logging, os
 from datetime import datetime, timezone
 from enum import Enum
 
+# DEBUG FLAGS
+DEBUG = True
+
 # CCP_PORT ALLOCATION
 CCP_PORT = 3028
 BUFFER_SIZE = 1024
@@ -41,14 +44,19 @@ def set_esp_state(new_state):
     logging.debug("Set CURR_ESP_STATE to %s", CURR_ESP_STATE)
 
 def send_esp_msg(data_to_send):
-    global esp_client_socket
+    global esp_client_socket, CURR_BR_STATE, CURR_ESP_STATE
     
     if esp_client_socket is not None:
         
         sent_json_data = json.dumps(data_to_send)
-        
-        esp_client_socket.sendall(sent_json_data.encode('utf-8'))
-        logging.debug(f"Sent to client: {sent_json_data}")
+        try:
+            esp_client_socket.sendall(sent_json_data.encode('utf-8'))
+            logging.debug(f"Sent to client: {sent_json_data}")
+        except BrokenPipeError:
+            logging.critical("ESP32 Connection Lost during transmission")
+            CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
+            CURR_BR_STATE = BR_STATE.ERROR
+            if DEBUG: setup_esp_socket()         
 
 def recv_esp_msg():
     global CURR_ESP_STATE, CURR_BR_STATE
@@ -56,10 +64,17 @@ def recv_esp_msg():
     try:
         data = esp_client_socket.recv(BUFFER_SIZE).decode('utf-8') # for rev 1.0 we could implement a 4 byte size system ahead of json data
     except TimeoutError:
+        # We've lost the ESP
         logging.critical("ESP connection timed out")
         CURR_ESP_STATE = ESP_STATE.ESP_OFFLINE
         CURR_BR_STATE = BR_STATE.ERROR
+        if DEBUG: setup_esp_socket()
         return
+    except ConnectionResetError:
+        # We have also lost the ESP but at a different phase
+        # My sincere hope is that we don't ever have to deal with an error like this in prod
+        return
+        
     
     return_data = ""
     
@@ -89,7 +104,8 @@ def setup_esp_socket():
     # Start listening for incoming connections (max 1 connection in the queue)
     esp_server_socket.listen(1)
     logging.debug("ESP Socket listening")
-    if (CURR_BR_STATE == BR_STATE.SHUTDOWN):
+    if (CURR_BR_STATE == BR_STATE.SHUTDOWN or CURR_BR_STATE == BR_STATE.ERROR):
+        if DEBUG: print("Lost connection to BR28")
         logging.warning("Attempting ESP re-connection")
         print(f"Attempting to reconnect to BR28 on {server_ip}:{CCP_PORT}")
     else: 
@@ -270,7 +286,10 @@ def setup_logging():
 
     now = datetime.now()
     date_time = now.strftime("%d-%m-%Y_%H-%M-%S")
-    log_file_name = date_time + "_log.log"
+    if DEBUG:
+        log_file_name = "test_" + date_time + "_log.log"
+    else:
+        log_file_name = date_time + "_log.log"
     
         
     log_file_path = os.path.join("logs", log_file_name)
@@ -400,5 +419,68 @@ def main_logic():
     # in the case where we want to shutdown, we do it here
     shutdown_esp_socket()
     
+def remote_cli_test():
+    # work through our state machine
+    global CURR_BR_STATE, CURR_ESP_STATE
+    setup_logging()
+    logging.info("Started CLI Remote Test Session")
+    print("Establishing the BladeRunner Command Line Interaction Tool v1")
+    print("Copyright T5C1 @ 2024")
+    print("Connection to BR28 being established")
+    setup_esp_socket()
+    set_br_state(BR_STATE.OPERATIONAL)
+    
+    while CURR_BR_STATE != BR_STATE.SHUTDOWN:
+        human_control = input("br28> ").lower()
+        match (human_control):
+            case "quit" | "exit":
+                # Behaviour note:
+                # If attempting to quit in CLI mode, the program requires the ESP32 to be connected to safely disconnect, if it fails to do so,
+                # the program will err and hang
+                esp_stop()
+                shutdown_esp_socket()
+                sys.exit()
+            case "forward-fast" | "forwardfast" | "forward":
+                esp_forward_fast()
+            case "forward-slow" | "forwardslow":
+                esp_forward_slow()
+            case "reverse-fast" | "reversefast" | "reverse":
+                esp_reverse_fast()
+            case "reverse-slow" | "reverseslow":
+                esp_reverse_slow()
+            case "stop" | "e-stop":
+                esp_stop()
+            case "door-open":
+                esp_door_open()
+            case "door-close":
+                esp_door_close()
+            case "help" | "commands":
+                print("List of available commands:\n")
+                print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("reverse-fast:\nreversefast:\nreverse: -> move BladeRunner reverse, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("door-open: -> opens BladeRunner doors\n")
+                print("door-close: -> closes BladeRunner doors\n")
+                print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
+                print("help:\ncommands: -> lists all available commands from BladeRunner Command Line Interaction Tool")
+            case _:
+                print("Unknown command, available commands:\n")
+                print("forward-fast:\nforwardfast:\nforward: -> move BladeRunner forwards, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("reverse-fast:\nreversefast:\nreverse: -> move BladeRunner reverse, fast\n")
+                print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
+                print("stop:\ne-stop: -> stops BladeRunner\n")
+                print("door-open: -> opens BladeRunner doors\n")
+                print("door-close: -> closes BladeRunner doors\n")
+                print("quit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
+                print("help:\ncommands: -> lists all available commands from BladeRunner Command Line Interaction Tool")
+    
+    shutdown_esp_socket()
+    
 if __name__ == '__main__':
-    main_logic()
+    if DEBUG:
+        remote_cli_test()
+    else:
+        main_logic()
