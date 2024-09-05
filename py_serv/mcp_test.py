@@ -32,7 +32,7 @@ def send_stat_requests():
                     "client_id": client_id,
                     "timestamp": get_current_timestamp()
                 }
-                mcp_server_socket.sendto(json.dumps(stat_request).encode('utf-8'), ("127.0.0.1", 20002))
+                mcp_server_socket.sendto(json.dumps(stat_request).encode('utf-8'), BR_address)
                 print("STAT request sent to CCP")  # Debug statement
             except Exception as e:
                 print(f"An error occurred while sending STAT request: {e}")
@@ -53,7 +53,7 @@ def send_exec_commands():
                     "action": action,
                     "timestamp": get_current_timestamp()
                 }
-                mcp_server_socket.sendto(json.dumps(exec_command).encode('utf-8'), ("127.0.0.1", 20002))
+                mcp_server_socket.sendto(json.dumps(exec_command).encode('utf-8'), BR_address)
                 print(f"Sent EXEC command to CCP: {exec_command}")
                 time.sleep(2)
         except Exception as e:
@@ -117,9 +117,10 @@ commands_thread.start()
 while True:
     try:
         # Receive incoming message from CCP
+        global BR_address
         bytesAddressPair = mcp_server_socket.recvfrom(BUFFER_SIZE)
         message = bytesAddressPair[0]  # CCP message received on connection
-        address = bytesAddressPair[1]  # CCP IP address and Port
+        BR_address = bytesAddressPair[1]  # CCP IP address and Port
 
         decodedMessage = message.decode()  # Decode message received from CCP
 
@@ -139,9 +140,9 @@ while True:
                 "client_id": client_id,
                 "timestamp": get_current_timestamp()
             }
-            mcp_server_socket.sendto(json.dumps(akin_response).encode('utf-8'), address)
+            mcp_server_socket.sendto(json.dumps(akin_response).encode('utf-8'), BR_address)
             print("AKIN response sent.")
-                        
+            
         elif jsonData['message'] == "STAT":
             if ccp_initialised:  # Check if CCP has been initialised
                 if 'status' in jsonData:
