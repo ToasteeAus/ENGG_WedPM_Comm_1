@@ -28,7 +28,7 @@ const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.233";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.151";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 #define FAST_SPEED 255
@@ -208,82 +208,85 @@ void loop() {
   static WiFiClient client;
   // reusable staticjsondoc
   StaticJsonDocument<512> staticJsonResponse;
+  try {
+    if (client.connect(serverIP, serverPort)) {
+      Serial.println("Connected to server");
 
-  if (client.connect(serverIP, serverPort)) {
-    Serial.println("Connected to server");
+      // Read data from the server
+      while (client.connected()) {
+        if (client.available()) {
+          readPhotoresistor(client);
+          // Read info from Python Server
+          readFromCCP(staticJsonResponse, client);
 
-    // Read data from the server
-    while (client.connected()) {
-      if (client.available()) {
-        readPhotoresistor(client);
-        // Read info from Python Server
-        readFromCCP(staticJsonResponse, client);
+          if (!staticJsonResponse.isNull()){
+            StaticJsonDocument<200> replydoc;
+            // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
+            if(staticJsonResponse["CMD"] == "SETUP"){
+              replydoc["ACK"] = "SETUP_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "STATUS"){
+              replydoc["ACK"] = "NORMINAL";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "STOP"){
+              setLEDStatus(0);
+              runMotor(0);
+              setMotorDirection(1,1); 
+              replydoc["ACK"] = "STOP_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "FORWARD_FAST"){
+              setLEDStatus(1);
+              setMotorDirection(0,1);
+              runMotor(FAST_SPEED);
+              replydoc["ACK"] = "FORWARD_FAST_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
+              setLEDStatus(2);
+              setMotorDirection(0,1);
+              runMotor(SLOW_SPEED);
+              replydoc["ACK"] = "FORWARD_SLOW_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
+              setLEDStatus(3);
+              setMotorDirection(0,0);
+              runMotor(SLOW_SPEED);
+              replydoc["ACK"] = "REVERSE_SLOW_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
+              setLEDStatus(4);
+              setMotorDirection(0,0);
+              runMotor(FAST_SPEED);
+              replydoc["ACK"] = "REVERSE_FAST_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
+              setLEDStatus(5);
+              doorControl(1);
+              replydoc["ACK"] = "DOOR_OPEN_OK";
+              sendToCCP(replydoc, client);
+            } else if (staticJsonResponse["CMD"] == "DOOR_CLOSE"){
+              setLEDStatus(6);
+              doorControl(-1);
+              replydoc["ACK"] = "DOOR_CLOSE_OK";
+              sendToCCP(replydoc, client);
+            }
+            
+            replydoc.clear();
 
-        if (!staticJsonResponse.isNull()){
-          StaticJsonDocument<200> replydoc;
-          // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
-          if(staticJsonResponse["CMD"] == "SETUP"){
-            replydoc["ACK"] = "SETUP_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "STATUS"){
-            replydoc["ACK"] = "NORMINAL";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "STOP"){
-            setLEDStatus(0);
-            runMotor(0);
-            setMotorDirection(1,1); 
-            replydoc["ACK"] = "STOP_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "FORWARD_FAST"){
-            setLEDStatus(1);
-            setMotorDirection(0,1);
-            runMotor(FAST_SPEED);
-            replydoc["ACK"] = "FORWARD_FAST_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
-            setLEDStatus(2);
-            setMotorDirection(0,1);
-            runMotor(SLOW_SPEED);
-            replydoc["ACK"] = "FORWARD_SLOW_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
-            setLEDStatus(3);
-            setMotorDirection(0,0);
-            runMotor(SLOW_SPEED);
-            replydoc["ACK"] = "REVERSE_SLOW_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
-            setLEDStatus(4);
-            setMotorDirection(0,0);
-            runMotor(FAST_SPEED);
-            replydoc["ACK"] = "REVERSE_FAST_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
-            setLEDStatus(5);
-            doorControl(1);
-            replydoc["ACK"] = "DOOR_OPEN_OK";
-            sendToCCP(replydoc, client);
-          } else if (staticJsonResponse["CMD"] == "DOOR_CLOSE"){
-            setLEDStatus(6);
-            doorControl(-1);
-            replydoc["ACK"] = "DOOR_CLOSE_OK";
-            sendToCCP(replydoc, client);
           }
-          
-          replydoc.clear();
-
         }
+        // Technically a clear isn't necessary but this prevents any leftover json data from our next read cycle
+        staticJsonResponse.clear();
       }
-      // Technically a clear isn't necessary but this prevents any leftover json data from our next read cycle
-      staticJsonResponse.clear();
+      client.stop();
+      runMotor(0);
+      setMotorDirection(1, 1);
+      Serial.println("Disconnected from server");
+    } else {
+      Serial.println("Connection to server failed");
+      NeoPixel.clear(); // wipe to confirm BR is unresponsive
+      NeoPixel.show();
     }
-    client.stop();
-    runMotor(0);
-    setMotorDirection(1, 1);
-    Serial.println("Disconnected from server");
-  } else {
-    Serial.println("Connection to server failed");
-    NeoPixel.clear(); // wipe to confirm BR is unresponsive
-    NeoPixel.show();
+  } catch (...){
+    //Serial.println("Connection to server failed");
   }
 }
