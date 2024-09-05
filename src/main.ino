@@ -28,7 +28,7 @@ const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.151";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 #define FAST_SPEED 255
@@ -131,6 +131,10 @@ void setLEDStatus(int status){
       green = 191;
       blue = 0;
       break;
+    case 99: // CONNECTED, no commands sent - BLUE
+      red = 0;
+      green = 0;
+      blue = 255;
     default:
       Serial.println("Unknown status");
       red = 255;
@@ -224,12 +228,18 @@ void setup() {
 void loop() {
   // Connect to the TCP server
   static WiFiClient client;
+  static int restoredConn = 0;
   // reusable staticjsondoc
   StaticJsonDocument<512> staticJsonResponse;
   try {
     if (client.connect(serverIP, serverPort, 1000)) {
       Serial.println("Connected to server");
 
+      if (restoredConn == 0){
+        setLEDStatus(99);
+        restoredConn = 1;
+      }
+      
       // Read data from the server
       while (client.connected()) {
         if (client.available()) {
@@ -299,9 +309,11 @@ void loop() {
       runMotor(0);
       setMotorDirection(1, 1);
       Serial.println("Disconnected from server");
+      restoredConn = 0;
     } else {
       Serial.println("Connection to server failed");
       pairingLEDFlash();
+      restoredConn = 0;
       //NeoPixel.clear(); // wipe to confirm BR is unresponsive
       //NeoPixel.show();
     }
