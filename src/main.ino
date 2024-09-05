@@ -79,6 +79,21 @@ void sendToCCP(JsonDocument &staticJson, WiFiClient &client){
   Serial.println(json_data);
 }
 
+void pairingLEDFlash(){
+  // Entire function is dedicated to creating a bluetooth pairing like flash
+  static int flashon = 0;
+  if (flashon == 0){
+    flashon = 1;
+    for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
+      NeoPixel.setPixelColor(pixel, NeoPixel.Color(0, 0, 255));
+    }
+  } else {
+    flashon = 0;
+    NeoPixel.clear();
+  }
+  NeoPixel.show();
+}
+
 void setLEDStatus(int status){
   static int red, green, blue;
   switch (status){
@@ -87,31 +102,34 @@ void setLEDStatus(int status){
       green = 0;
       blue = 0;
       break;
-    case 1: // FORWARD-FAST - White
-      red = 255;
-      green = 255;
-      blue = 255;
+    case 1: // FORWARD-FAST - Light Green
+      red =  88;
+      green = 214;
+      blue = 141;
       break;
-    case 2: // FORWARD-SLOW - Light Blue
-    case 3: // REVERSE-SLOW - Light Blue
-      red = 149;
-      green = 216;
-      blue = 247;
+    case 2: // FORWARD-SLOW - Dark Green
+      red = 30;
+      green = 132;
+      blue = 73;
+    case 3: // REVERSE-SLOW - Dark Blue
+      red = 26;
+      green = 82;
+      blue = 118;
       break;
-    case 4: // REVERSE-FAST - Grey
-      red = 170;
-      green = 170;
-      blue = 170;
+    case 4: // REVERSE-FAST - Light Blue
+      red = 46;
+      green = 134;
+      blue = 193;
       break;
     case 5: // DOOR-OPEN - Green
-      red = 49;
-      green = 164;
-      blue = 88;
+      red = 0;
+      green = 128;
+      blue = 0;
       break;
     case 6: // DOOR-CLOSE - Amber
-      red = 234;
-      green = 167;
-      blue = 25;
+      red = 255;
+      green = 191;
+      blue = 0;
       break;
     default:
       Serial.println("Unknown status");
@@ -209,7 +227,7 @@ void loop() {
   // reusable staticjsondoc
   StaticJsonDocument<512> staticJsonResponse;
   try {
-    if (client.connect(serverIP, serverPort)) {
+    if (client.connect(serverIP, serverPort, 1000)) {
       Serial.println("Connected to server");
 
       // Read data from the server
@@ -283,10 +301,10 @@ void loop() {
       Serial.println("Disconnected from server");
     } else {
       Serial.println("Connection to server failed");
-      NeoPixel.clear(); // wipe to confirm BR is unresponsive
-      NeoPixel.show();
+      pairingLEDFlash();
+      //NeoPixel.clear(); // wipe to confirm BR is unresponsive
+      //NeoPixel.show();
     }
   } catch (...){
-    //Serial.println("Connection to server failed");
   }
 }
