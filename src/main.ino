@@ -16,36 +16,74 @@
 #define PHOTORESISTOR_PIN 26
 #define PIN_NEO_PIXEL 4 // Schematic shows pin as GPIO4
 
-// Door
-Servo door;
-
 // Status LEDs
 #define NUM_PIXELS 4    // The number of LEDs in sequence
-Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
 
 // WiFi credentials
 const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.151";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
+// Station and Motor Speeds
 #define FAST_SPEED 255
 #define SLOW_SPEED 150
 int atStation = 0;
 
+// Class Object Constructors
+Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
+WiFiClient client;
+Servo door;
+
+// Core Comms Functions //
+
 void setupWifi(){
   // Connect to Wi-Fi
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
+  Serial.print("WiFi: Connecting");
+  // WiFi.config(10.20.30.128) // forces the ESP32 to use our given IP address
+  if (!WiFi.isConnected()){ // solely to protect against erroneous calls
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(1000);
+      Serial.print(".");
+      LEDFlash(255, 165, 0);
+    }
+
+  Serial.println("\nWiFi: Connected");
   }
-  Serial.println("Connected to WiFi");
 }
 
-void readFromCCP(JsonDocument &staticJson, WiFiClient &client){
+void setupCCP(){
+  Serial.print("CCP: Connecting");
+
+  while(!client.connected()){
+    if (!WiFi.isConnected()){ // Prevent issues with socket failing with WiFi dying during connection
+      setupWifi();
+    } else {
+      try{
+        client.connect(serverIP, serverPort, 1000);
+      } catch (...){
+
+      }
+    }
+    delay(1000); // Simply to ease the flashing and reduce Serial Monitor logs
+    Serial.print(".");
+    LEDFlash(0, 0, 255);
+  }
+  Serial.println("\nCCP: Connected");
+  setLEDStatus(99);
+}
+
+void setupNetworks(){
+  setupWifi();
+  setupCCP();
+}
+
+// Main Execution Logic //
+
+void readFromCCP(JsonDocument &staticJson){
   // We assume we are connected by this point
 
   // Buffer for receiving JSON data
@@ -79,13 +117,76 @@ void sendToCCP(JsonDocument &staticJson, WiFiClient &client){
   Serial.println(json_data);
 }
 
-void pairingLEDFlash(){
+void execFromCCP(JsonDocument &staticJson){
+  StaticJsonDocument<200> replydoc;
+
+  // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
+  if(staticJson["CMD"] == "SETUP"){
+    replydoc["ACK"] = "SETUP_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "STATUS"){
+    replydoc["ACK"] = "NORMINAL";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "STOP"){
+    setLEDStatus(0);
+    runMotor(0);
+    setMotorDirection(1,1); 
+    replydoc["ACK"] = "STOP_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "FORWARD_FAST"){
+    setLEDStatus(1);
+    setMotorDirection(0,1);
+    runMotor(FAST_SPEED);
+    replydoc["ACK"] = "FORWARD_FAST_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "FORWARD_SLOW"){
+    setLEDStatus(2);
+    setMotorDirection(0,1);
+    runMotor(SLOW_SPEED);
+    replydoc["ACK"] = "FORWARD_SLOW_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "REVERSE_SLOW"){
+    setLEDStatus(3);
+    setMotorDirection(0,0);
+    runMotor(SLOW_SPEED);
+    replydoc["ACK"] = "REVERSE_SLOW_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "REVERSE_FAST"){
+    setLEDStatus(4);
+    setMotorDirection(0,0);
+    runMotor(FAST_SPEED);
+    replydoc["ACK"] = "REVERSE_FAST_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "DOOR_OPEN"){
+    setLEDStatus(5);
+    doorControl(1);
+    replydoc["ACK"] = "DOOR_OPEN_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "DOOR_CLOSE"){
+    setLEDStatus(6);
+    doorControl(-1);
+    replydoc["ACK"] = "DOOR_CLOSE_OK";
+    sendToCCP(replydoc, client);
+  }
+  
+  replydoc.clear();
+}
+
+// Hardware Functions //
+void setupLEDS(){
+  NeoPixel.begin();
+  NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
+  NeoPixel.show();
+  NeoPixel.setBrightness(50); // so they don't blind us
+}
+
+void LEDFlash(int red, int green, int blue){
   // Entire function is dedicated to creating a bluetooth pairing like flash
   static int flashon = 0;
   if (flashon == 0){
     flashon = 1;
     for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
-      NeoPixel.setPixelColor(pixel, NeoPixel.Color(0, 0, 255));
+      NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
     }
   } else {
     flashon = 0;
@@ -135,6 +236,7 @@ void setLEDStatus(int status){
       red = 0;
       green = 0;
       blue = 255;
+      break;
     default:
       Serial.println("Unknown status");
       red = 255;
@@ -209,114 +311,44 @@ void readUltrasonic(){
   //long dist = Wire.read();
 }
 
+// Arduino/ESP Required Functions //
+
 void setup() {
   // Initialize Serial
   Serial.begin(115200);
-  NeoPixel.begin();
-  NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
-  NeoPixel.show();
-  NeoPixel.setBrightness(50); // so they don't blind us
+  setupLEDS();
+
   door.attach(DOOR_PIN); // for controlling the door operations
   // set motor pins to outputs
   pinMode(DIS_PIN, OUTPUT); 
   pinMode(DIR_PIN, OUTPUT);
   pinMode(PWM_PIN, OUTPUT);
   //Wire.begin();
-  setupWifi();
+
+  setupNetworks();
 }
 
 void loop() {
-  // Connect to the TCP server
-  static WiFiClient client;
-  static int restoredConn = 0;
-  // reusable staticjsondoc
   StaticJsonDocument<512> staticJsonResponse;
-  try {
-    if (client.connect(serverIP, serverPort, 1000)) {
-      Serial.println("Connected to server");
 
-      if (restoredConn == 0){
-        setLEDStatus(99);
-        restoredConn = 1;
+  if (client.connected() and WiFi.isConnected()){
+    // Listen to TCP Server for commands
+    if (client.available()) {
+      //readPhotoresistor(client);
+      // Read info from Python Server
+      readFromCCP(staticJsonResponse);
+
+      if (!staticJsonResponse.isNull()){
+        execFromCCP(staticJsonResponse);
       }
-      
-      // Read data from the server
-      while (client.connected()) {
-        if (client.available()) {
-          readPhotoresistor(client);
-          // Read info from Python Server
-          readFromCCP(staticJsonResponse, client);
-
-          if (!staticJsonResponse.isNull()){
-            StaticJsonDocument<200> replydoc;
-            // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
-            if(staticJsonResponse["CMD"] == "SETUP"){
-              replydoc["ACK"] = "SETUP_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "STATUS"){
-              replydoc["ACK"] = "NORMINAL";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "STOP"){
-              setLEDStatus(0);
-              runMotor(0);
-              setMotorDirection(1,1); 
-              replydoc["ACK"] = "STOP_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "FORWARD_FAST"){
-              setLEDStatus(1);
-              setMotorDirection(0,1);
-              runMotor(FAST_SPEED);
-              replydoc["ACK"] = "FORWARD_FAST_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "FORWARD_SLOW"){
-              setLEDStatus(2);
-              setMotorDirection(0,1);
-              runMotor(SLOW_SPEED);
-              replydoc["ACK"] = "FORWARD_SLOW_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "REVERSE_SLOW"){
-              setLEDStatus(3);
-              setMotorDirection(0,0);
-              runMotor(SLOW_SPEED);
-              replydoc["ACK"] = "REVERSE_SLOW_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "REVERSE_FAST"){
-              setLEDStatus(4);
-              setMotorDirection(0,0);
-              runMotor(FAST_SPEED);
-              replydoc["ACK"] = "REVERSE_FAST_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "DOOR_OPEN"){
-              setLEDStatus(5);
-              doorControl(1);
-              replydoc["ACK"] = "DOOR_OPEN_OK";
-              sendToCCP(replydoc, client);
-            } else if (staticJsonResponse["CMD"] == "DOOR_CLOSE"){
-              setLEDStatus(6);
-              doorControl(-1);
-              replydoc["ACK"] = "DOOR_CLOSE_OK";
-              sendToCCP(replydoc, client);
-            }
-            
-            replydoc.clear();
-
-          }
-        }
-        // Technically a clear isn't necessary but this prevents any leftover json data from our next read cycle
-        staticJsonResponse.clear();
-      }
-      client.stop();
-      runMotor(0);
-      setMotorDirection(1, 1);
-      Serial.println("Disconnected from server");
-      restoredConn = 0;
-    } else {
-      Serial.println("Connection to server failed");
-      pairingLEDFlash();
-      restoredConn = 0;
-      //NeoPixel.clear(); // wipe to confirm BR is unresponsive
-      //NeoPixel.show();
     }
-  } catch (...){
+    // Technically a clear isn't necessary but this prevents any leftover json data from our next read cycle
+    staticJsonResponse.clear();
+  } else {
+    // WiFi or CCP have died, check both
+    Serial.println("URGENT: LOST COMMS, RE-ESTABLISHING");
+    runMotor(0);
+    setMotorDirection(1, 1);
+    setupNetworks();
   }
 }
