@@ -41,6 +41,7 @@ void setupWifi(){
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi...");
+    LEDFlash(255, 165, 0);
   }
   Serial.println("Connected to WiFi");
 }
@@ -79,13 +80,13 @@ void sendToCCP(JsonDocument &staticJson, WiFiClient &client){
   Serial.println(json_data);
 }
 
-void pairingLEDFlash(){
+void LEDFlash(int red, int green, int blue){
   // Entire function is dedicated to creating a bluetooth pairing like flash
   static int flashon = 0;
   if (flashon == 0){
     flashon = 1;
     for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
-      NeoPixel.setPixelColor(pixel, NeoPixel.Color(0, 0, 255));
+      NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
     }
   } else {
     flashon = 0;
@@ -312,7 +313,7 @@ void loop() {
       restoredConn = 0;
     } else {
       Serial.println("Connection to server failed");
-      pairingLEDFlash();
+      LEDFlash(0, 0, 255);
       restoredConn = 0;
       //NeoPixel.clear(); // wipe to confirm BR is unresponsive
       //NeoPixel.show();

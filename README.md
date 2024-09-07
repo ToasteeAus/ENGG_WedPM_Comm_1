@@ -20,4 +20,19 @@ This guide should help get your own local VSCode Workspace setup with the requir
 ## Using PlatformIO
 Ridiculously helpful [guide](https://randomnerdtutorials.com/vs-code-platformio-ide-esp32-esp8266-arduino/)
 
-TODO Find the ESP32 type used - suspect DOIT ESP32.
+# Debugging the BladeRunner
+
+When in operation the BladeRunner will expose 4 LEDS to display its current status, this will flash or become a solid colour representative of certain states.
+Key states:
+WiFi not connected - Flashing Yellow/Amber
+CCP not connected - Flashing Dark Blue
+Stopped - Solid Red
+Unknown state - Solid White
+
+Other states represented:
+Door Opening/Open - Flashing/Solid Green
+Door Closing/Closed - Flashing/Solid Amber
+Forward, Slow - Solid Dark Green
+Forward, Fast - Solid Light Green
+Reverse, Slow - Solid Dark Blue
+Reverse, Fast - Solid Light Blue
