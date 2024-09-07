@@ -168,6 +168,7 @@ def setup_mcp_socket():
 def shutdown_esp_socket():
     # Close the connection with the client
     if esp_client_socket is not None:
+        esp_client_socket.shutdown(socket.SHUT_RDWR)
         esp_client_socket.close()
     # Close the server socket
     esp_server_socket.close()
