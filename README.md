@@ -26,6 +26,7 @@ When in operation the BladeRunner will expose 4 LEDS to display its current stat
 Key states:
 WiFi not connected - Flashing Yellow/Amber
 CCP not connected - Flashing Dark Blue
+CCP connected, no commands sent - Solid Dark Blue
 Stopped - Solid Red
 Unknown state - Solid White
 
