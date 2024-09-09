@@ -494,13 +494,13 @@ def esp_listener_thread():
                 
             if data != "":
                 return_data = ""
-                logging.info(f"Received from client: {data}")
+                logging.debug(f"Received from ESP: {data}")
                 
                 # Attempt to parse the JSON data 
                 try:
                     return_data = json.loads(data)
                 except json.JSONDecodeError:
-                    logging.error("Received from client, but failed to parse JSON")
+                    logging.error("Received from ESP, but failed to parse JSON")
                     continue
                 
                 # now we push return_data onto the queue
