@@ -24,7 +24,7 @@ const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
 // Server address and port
-const char* serverIP = "192.168.212.151";  // Replace with the IP address of your local python server
+const char* serverIP = "192.168.212.177";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
@@ -121,7 +121,12 @@ void execFromCCP(JsonDocument &staticJson){
   StaticJsonDocument<200> replydoc;
 
   // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
+  // For Collisions that the ESP detect, send the following message structure:
+  // {"ALERT":"COLLISION"}
   if(staticJson["CMD"] == "SETUP"){
+    setLEDStatus(0);
+    runMotor(0);
+    setMotorDirection(1,1); 
     replydoc["ACK"] = "SETUP_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "STATUS"){
