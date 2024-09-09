@@ -335,6 +335,9 @@ def esp_listener_thread():
             except TimeoutError:
                 # it isn't always a guarantee that emptiness is confirmed by the queue, check again before we think its hit the fan
                 if not ESP_SENT_Q.empty():
+                    copy = ESP_SENT_Q.queue
+                    logging.critical("ESP_SENT_Q not Empty, deque items:")
+                    logging.critical(copy)
                     logging.critical("ESP connection timed out")
                     setup_esp_socket()
                 else:

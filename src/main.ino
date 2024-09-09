@@ -163,15 +163,17 @@ void execFromCCP(JsonDocument &staticJson){
     replydoc["ACK"] = "REVERSE_FAST_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "DOOR_OPEN"){
-    setLEDStatus(5);
-    doorControl(1);
     replydoc["ACK"] = "DOOR_OPEN_OK";
     sendToCCP(replydoc, client);
+
+    doorControl(1);
+    setLEDStatus(5);
   } else if (staticJson["CMD"] == "DOOR_CLOSE"){
-    setLEDStatus(6);
-    doorControl(-1);
-    replydoc["ACK"] = "DOOR_CLOSE_OK";
+    replydoc["ACK"] = "DOOR_CLOSE_OK"; // Unique Bug, if this reply is set to fire after the door control event + status LED, the CCP timesout too long after its complete
     sendToCCP(replydoc, client);
+
+    doorControl(-1);
+    setLEDStatus(6);
   }
   
   replydoc.clear();
@@ -298,15 +300,26 @@ void readPhotoresistor(WiFiClient &client){
   }
 }
 
+void doorControlFlash(){
+  // Sets a delay of 5000ms but allows for flashing lights to occur during this period purely for style
+  for(int i = 0; i < 10; i++){
+    LEDFlash(255, 191, 0);
+    delay(500);
+  }
+}
+
 void doorControl(int direction) {
+ 
   if (direction == 1) { // door open; moves in clockwise direction
     door.write(45);
-    delay(5000); // rotates for 5 seconds
+    //delay(5000); // rotates for 5 seconds
+    doorControlFlash();
     door.write(90); // stops
     } 
   else if (direction == -1) { // door close; moves in anticlockwise direction
     door.write(135);
-    delay(5000); // rotates for 5 seconds
+    //delay(5000); // rotates for 5 seconds
+    doorControlFlash();
     door.write(90); // stops
     }
 }
