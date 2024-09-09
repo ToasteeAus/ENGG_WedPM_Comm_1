@@ -46,7 +46,7 @@ void setupWifi(){
   if (!WiFi.isConnected()){ // solely to protect against erroneous calls
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
-      delay(1000);
+      delay(500);
       Serial.print(".");
       LEDFlash(255, 165, 0);
     }
@@ -63,12 +63,12 @@ void setupCCP(){
       setupWifi();
     } else {
       try{
-        client.connect(serverIP, serverPort, 1000);
+        client.connect(serverIP, serverPort, 250);
       } catch (...){
 
       }
     }
-    delay(1000); // Simply to ease the flashing and reduce Serial Monitor logs
+    delay(250); // Simply to ease the flashing and reduce Serial Monitor logs
     Serial.print(".");
     LEDFlash(0, 0, 255);
   }
@@ -168,12 +168,17 @@ void execFromCCP(JsonDocument &staticJson){
 
     doorControl(1);
     setLEDStatus(5);
+
+    replydoc.clear(); // TODO: DELETE THESE LINES BEFORE BRINGING INTO PRODUCTION
+    replydoc["ALERT"] = "STOPPED_AT_STATION";
+
+    sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "DOOR_CLOSE"){
     replydoc["ACK"] = "DOOR_CLOSE_OK"; // Unique Bug, if this reply is set to fire after the door control event + status LED, the CCP timesout too long after its complete
     sendToCCP(replydoc, client);
 
     doorControl(-1);
-    setLEDStatus(6);
+    setLEDStatus(0);
   }
   
   replydoc.clear();
