@@ -181,11 +181,6 @@ void execFromCCP(JsonDocument &staticJson){
 
     doorControl(1);
     setLEDStatus(5);
-
-    replydoc.clear(); // TODO: DELETE THESE LINES BEFORE BRINGING INTO PRODUCTION
-    replydoc["ALERT"] = "STOPPED_AT_STATION";
-
-    sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "DOOR_CLOSE"){
     replydoc["ACK"] = "DOOR_CLOSE_OK"; // Unique Bug, if this reply is set to fire after the door control event + status LED, the CCP timesout too long after its complete
     sendToCCP(replydoc, client);
@@ -300,6 +295,9 @@ void softAcceleration(int currSpeed, int newSpeed){
 }
 
 void readPhotoresistor(WiFiClient &client){
+  // IR Detector for Station Stop
+  StaticJsonDocument<200> replydoc;
+
   int value = analogRead(PHOTORESISTOR_PIN);
 
   if(value > 450){
@@ -314,6 +312,11 @@ void readPhotoresistor(WiFiClient &client){
         }
     }
     */
+    replydoc.clear(); // TODO: DELETE THESE LINES BEFORE BRINGING INTO PRODUCTION
+    replydoc["ALERT"] = "STOPPED_AT_STATION";
+
+    sendToCCP(replydoc, client);
+
     if(atStation == 1){
       doorControl(1);
     }
@@ -345,8 +348,8 @@ void doorControl(int direction) {
 }
 
 void readUltrasonic(){
-  //Wire.requestFrom(0x57, 32);
-  //long dist = Wire.read();
+  Wire.requestFrom(0x57, 32);
+  long dist = Wire.read();
 }
 
 // Arduino/ESP Required Functions //
@@ -361,7 +364,7 @@ void setup() {
   pinMode(DIS_PIN, OUTPUT); 
   pinMode(DIR_PIN, OUTPUT);
   pinMode(PWM_PIN, OUTPUT);
-  //Wire.begin();
+  Wire.begin();
 
   setupNetworks();
 }
@@ -372,7 +375,7 @@ void loop() {
   if (client.connected() and WiFi.isConnected()){
     // Listen to TCP Server for commands
     if (client.available()) {
-      //readPhotoresistor(client);
+      readPhotoresistor(client);
       // Read info from Python Server
       readFromCCP(staticJsonResponse);
 
