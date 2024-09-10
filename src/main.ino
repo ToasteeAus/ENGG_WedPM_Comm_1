@@ -48,7 +48,7 @@ void setupWifi(){
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.print(".");
-      LEDFlash(255, 165, 0);
+      LEDFlash(255, 40, 0); // 80 was a good spot for green
     }
 
   Serial.println("\nWiFi: Connected");
@@ -128,6 +128,19 @@ void execFromCCP(JsonDocument &staticJson){
     runMotor(0);
     setMotorDirection(1,1); 
     replydoc["ACK"] = "SETUP_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "LIGHT"){ // Only here for testing lighting options in static offsite tests
+    
+    int red = staticJson["RED"];
+    int green = staticJson["GREEN"];
+    int blue = staticJson["BLUE"];
+
+    for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
+      NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
+    }
+    NeoPixel.show();
+
+    replydoc["ACK"] = "LIGHT_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "STATUS"){
     replydoc["ACK"] = "NORMINAL";
@@ -215,33 +228,34 @@ void setLEDStatus(int status){
       green = 0;
       blue = 0;
       break;
-    case 1: // FORWARD-FAST - Light Green
-      red =  88;
-      green = 214;
-      blue = 141;
+    case 1: // FORWARD-FAST - Green
+      red =  50;
+      green = 200;
+      blue = 0;
       break;
-    case 2: // FORWARD-SLOW - Dark Green
-      red = 30;
-      green = 132;
-      blue = 73;
-    case 3: // REVERSE-SLOW - Dark Blue
-      red = 26;
-      green = 82;
-      blue = 118;
+    case 2: // FORWARD-SLOW - Lighter Green/Aquamarine-y
+      red = 0;
+      green = 255;
+      blue = 40;
       break;
-    case 4: // REVERSE-FAST - Light Blue
-      red = 46;
-      green = 134;
-      blue = 193;
+    case 3: // REVERSE-SLOW - Light Blue (lighter = slow)
+      red = 0;
+      green = 70;
+      blue = 200;
+      break;
+    case 4: // REVERSE-FAST - Dark Blue
+      red = 0;
+      green = 20;
+      blue = 255;
       break;
     case 5: // DOOR-OPEN - Green
       red = 0;
-      green = 128;
+      green = 255;
       blue = 0;
       break;
     case 6: // DOOR-CLOSE - Amber
       red = 255;
-      green = 191;
+      green = 40;
       blue = 0;
       break;
     case 99: // CONNECTED, no commands sent - BLUE
@@ -250,10 +264,11 @@ void setLEDStatus(int status){
       blue = 255;
       break;
     default:
-      Serial.println("Unknown status");
+      Serial.println("Unknown status"); // White
       red = 255;
       green = 255;
       blue = 255;
+      break;
   }
 
   for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
@@ -308,7 +323,7 @@ void readPhotoresistor(WiFiClient &client){
 void doorControlFlash(){
   // Sets a delay of 5000ms but allows for flashing lights to occur during this period purely for style
   for(int i = 0; i < 10; i++){
-    LEDFlash(255, 191, 0);
+    LEDFlash(255, 60, 0);
     delay(500);
   }
 }

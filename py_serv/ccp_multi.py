@@ -25,7 +25,7 @@ ESP_RECV_LOCK = threading.Lock()
 
 # MCP UDP Server
 MCP_PORT = 3001
-MCP_SERVER = ("0.0.0.0", MCP_PORT)
+MCP_SERVER = ("192.168.50.217", MCP_PORT)
 mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 MCP_CONNECTED = False
 
@@ -61,7 +61,7 @@ def mcp_status_creator():
                 "message": "STAT",
                 "client_id": CLIENT_ID,
                 "timestamp": get_current_timestamp(),
-                "status": CURR_ESP_STATUS 
+                "status": str(CURR_ESP_STATUS).removeprefix("ESP_STATUS.")
             }
     
     return status_msg
@@ -119,7 +119,8 @@ def setup_esp_socket():
     
     if DEBUG: print("It is now safe to re-attempt commands: ")
     
-    esp_client_socket.settimeout(10.0) # sets a 10 second timeout on any blocking action, this should hopefully cause our safety feature to kick in
+    esp_client_socket.settimeout(15.0) # sets a 15 second timeout on any blocking action, this should hopefully cause our safety feature to kick in
+    # TODO: This may need to be changed after better integration testing
     
     ESP_SENT_LOCK.acquire()
     ESP_SENT_Q = queue.Queue() # Should only be necessary when re-connecting, but this will catch all cases
@@ -168,7 +169,15 @@ def send_esp_msg(data_to_send):
 # MCP Socket Control
 
 def send_mcp_data(data_to_send): # expects a python dict obj to turn into a string
-    mcp_client_socket.sendto(json.dumps(data_to_send).encode('utf-8'), MCP_SERVER)
+    success = False
+    while success == False:
+        try:
+            if (mcp_client_socket.sendto(json.dumps(data_to_send).encode('utf-8'), MCP_SERVER) > 0): # At least 1 byte has been sent, MCP is up
+                success = True
+                logging.debug("Sent message to MCP: " + str(data_to_send))
+        except OSError:
+            logging.debug("MCP is not available, check IP or MCP Health status")
+            time.sleep(0.5)
 
 def init_mcp_connection():
     # Initialisation message for MCP
@@ -181,7 +190,11 @@ def init_mcp_connection():
     
     # Send message to MCP
     send_mcp_data(init_json)
-    logging.debug("Initialisation message sent to MCP: " + init_json)
+    logging.debug("Initialisation message sent to MCP: " + str(init_json))
+    
+    MCP_SENT_LOCK.acquire()
+    MCP_SENT_Q.put(init_json)
+    MCP_SENT_LOCK.release()
 
 # State/Status Helpers
 
@@ -286,6 +299,16 @@ def esp_door_close():
     set_esp_action(ESP_ACTION.DOOR_CLOSE)
     set_esp_status(ESP_STATUS.STOPPED_AT_STATION)
 
+def esp_light(red, green, blue):
+    setup_msg = {
+        "CMD":"LIGHT",
+        "RED": red,
+        "GREEN": green,
+        "BLUE": blue
+    }
+    
+    send_esp_msg(setup_msg)
+
 # Core Thread Functions
 
 def parse_esp_response():
@@ -319,6 +342,16 @@ def parse_esp_response():
                 CURR_ESP_STATUS = ESP_STATUS.STOPPED_AT_STATION
                 CURR_ESP_ACTION = ESP_ACTION.STOP
                 
+                station_json = {
+                    "client_type": "ccp",
+                    "message": "CCIN",
+                    "client_id": CLIENT_ID,
+                    "timestamp": get_current_timestamp(),
+                    "status": str(CURR_ESP_STATUS).removeprefix("ESP_STATUS."),
+                    "station_id": "STXX" # Filler data because there is no way on earth we are reading that blinking LED
+                }
+                send_mcp_data(station_json)
+                
             elif esp_data["ALERT"] == "COLLISION":
                 logging.info("BladeRunner collision occurred")
                 CURR_ESP_STATUS = ESP_STATUS.CRASH
@@ -333,7 +366,7 @@ def parse_mcp_response():
         MCP_RECV_LOCK.release()
         
         # We know this is intended for BR28 and is of type ccp
-        match (mcp_data['message']):
+        match (mcp_data["message"]):
             case "AKIN":
                 # We should only add to the MCP sent queue for requests that need acknoledgment
                 # This means we are prepared for when they finally implement collision reporting/error reporting properly
@@ -342,6 +375,7 @@ def parse_mcp_response():
                 MCP_SENT_LOCK.release()
                 
                 logging.info("MCP Acknowledgement of CCIN: " + mcp_data["message"] + " Original CCP req: " + ccp_data["message"])
+                
                 
             case "STAT":
                 status_msg = mcp_status_creator()
@@ -402,7 +436,8 @@ def remote_cli_test():
     
     while True:
         if ESP_RECV_Q.empty():
-            human_control = input("br28> ").lower()
+            raw = input("br28> ").lower().split()
+            human_control = raw[0]
             match (human_control):
                 case "quit" | "exit" | "q":
                     # Behaviour note:
@@ -420,6 +455,12 @@ def remote_cli_test():
                     if confirm == "y" or confirm == "yes":
                         shutdown_esp_socket()
                         sys.exit()
+                case "light":
+                    if len(raw) == 4:
+                        # we have all our values, R = 1, G = 2, B = 3
+                        esp_light(int(raw[1]), int(raw[2]), int(raw[3]))
+                    else:
+                        print("The Light command expects 3 whitespace separate colour values.\nex: light R G B\n")
                 case "forward-fast" | "forwardfast" | "forward":
                     esp_forward_fast()
                 case "forward-slow" | "forwardslow":
@@ -511,6 +552,8 @@ def esp_listener_thread():
             time.sleep(0.5)
 
 def mcp_listener_thread():
+    global CURR_SYS_STATE
+    
     while not HUMAN_INITIATED_EXIT:
         data = ""
         
@@ -519,15 +562,18 @@ def mcp_listener_thread():
         except TimeoutError:
             # This means we've lost MCP, we need to re-init and stop our ESP
             logging.critical("MCP connection timed out")
-            pass
+            CURR_SYS_STATE = SYS_STATE.ESP_CONNECTED
+
         except ConnectionResetError:
             # We've lost the MCP for some horrific error
             logging.critical("MCP connection reset")
-            pass
+            CURR_SYS_STATE = SYS_STATE.ESP_CONNECTED
+
         except OSError:
             # Forcibly Exit
             logging.critical("MCP Socket Terminated")
-            break
+            CURR_SYS_STATE = SYS_STATE.ESP_CONNECTED
+            time.sleep(0.5)
             
         if data != "":
             return_data = ""
@@ -593,3 +639,5 @@ def main_logic():
 
 if __name__ == '__main__':
     main_logic()
+    
+# TODO: Error handling, if we have MCP connected but the ESP dies, we don't cover it, same for MCP dying but ESP connected etc.

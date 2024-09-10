@@ -24,16 +24,24 @@ Ridiculously helpful [guide](https://randomnerdtutorials.com/vs-code-platformio-
 
 When in operation the BladeRunner will expose 4 LEDS to display its current status, this will flash or become a solid colour representative of certain states.
 Key states:
-WiFi not connected - Flashing Yellow/Amber
+WiFi not connected - Flashing Amber
 CCP not connected - Flashing Dark Blue
 CCP connected, no commands sent - Solid Dark Blue
 Stopped - Solid Red
 Unknown state - Solid White
 
 Other states represented:
-Door Opening/Open - Flashing/Solid Green
-Door Closing/Closed - Flashing/Solid Amber
-Forward, Slow - Solid Dark Green
-Forward, Fast - Solid Light Green
-Reverse, Slow - Solid Dark Blue
-Reverse, Fast - Solid Light Blue
+Door Opening/Open - Flashing Amber/Solid Green
+Door Closing/Closed - Flashing Amber/Solid Red
+Forward, Slow - Solid Light Green/Aquarmarine
+Forward, Fast - Solid Green
+Reverse, Slow - Solid Light Blue
+Reverse, Fast - Solid Dark Blue
+
+(Slow = Lighter)
+
+# Known limitations
+Will fallover if MCP dies during operation -> this needs to be urgently resolved
+Doesn't check for health of ESP even if MCP isn't actively sending requests -> Unlikely in prod environment but can occur frequently in testing (However, ESP can connect freely)
+Cannot comprehend the LED IR Blink patterns -> near impossible and hoping the MCP teams are scrapping it
+If the ESP detects it is at a station we will send back status with no station id -> Could cause issues with MCP given how theyre implemented, will only know tmrw
