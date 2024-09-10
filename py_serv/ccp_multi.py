@@ -146,7 +146,7 @@ def send_esp_msg(data_to_send):
             
             try:
                 esp_client_socket.sendall(sent_json_data.encode('utf-8'))
-                logging.debug(f"Sent to client: {sent_json_data}")
+                logging.debug(f"Sent to ESP: {sent_json_data}")
                 
                 ESP_SENT_LOCK.acquire()
                 ESP_SENT_Q.put(data_to_send)
