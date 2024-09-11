@@ -30,7 +30,7 @@ IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
 IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* serverIP = "10.20.30.1";  // Replace with the IP address of your local python server
+const char* serverIP = "10.20.30.199";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds

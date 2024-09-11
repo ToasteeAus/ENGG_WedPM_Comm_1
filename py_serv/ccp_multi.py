@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 # Debug Information
-DEBUG = True
+DEBUG = False
 CLI_INFO = False
 HUMAN_INITIATED_EXIT = False
 
@@ -13,7 +13,7 @@ BUFFER_SIZE = 1024
 CLIENT_ID = "BR28"
 
 # ESP Socket Server
-CCP_TCP_SERVER = ('10.20.30.1', CCP_PORT)  # Listen on all available interfaces
+CCP_TCP_SERVER = ('10.20.30.199', CCP_PORT)  # Listen on all available interfaces
 esp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create global-ish scoped socket to reference
 esp_client_socket = None
 
@@ -24,8 +24,8 @@ ESP_SENT_LOCK = threading.Lock()
 ESP_RECV_LOCK = threading.Lock()
 
 # MCP UDP Server
-MCP_PORT = 3001
-MCP_SERVER = ("192.168.50.217", MCP_PORT)
+MCP_PORT = 2000
+MCP_SERVER = ("10.20.30.177", MCP_PORT)
 mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 MCP_CONNECTED = False
 
