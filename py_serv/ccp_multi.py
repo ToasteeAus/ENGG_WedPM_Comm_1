@@ -13,7 +13,7 @@ BUFFER_SIZE = 1024
 CLIENT_ID = "BR28"
 
 # ESP Socket Server
-CCP_TCP_SERVER = ('0.0.0.0', CCP_PORT)  # Listen on all available interfaces
+CCP_TCP_SERVER = ('10.20.30.1', CCP_PORT)  # Listen on all available interfaces
 esp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create global-ish scoped socket to reference
 esp_client_socket = None
 
