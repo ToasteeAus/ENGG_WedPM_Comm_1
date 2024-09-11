@@ -2,7 +2,6 @@
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
-#include <Wire.h>
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
@@ -348,8 +347,7 @@ void doorControl(int direction) {
 }
 
 void readUltrasonic(){
-  Wire.requestFrom(0x57, 32);
-  long dist = Wire.read();
+  // Emptying, TODO: 
 }
 
 // Arduino/ESP Required Functions //
@@ -364,7 +362,6 @@ void setup() {
   pinMode(DIS_PIN, OUTPUT); 
   pinMode(DIR_PIN, OUTPUT);
   pinMode(PWM_PIN, OUTPUT);
-  Wire.begin();
 
   setupNetworks();
 }

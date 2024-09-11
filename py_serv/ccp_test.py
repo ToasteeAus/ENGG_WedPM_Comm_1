@@ -2,17 +2,11 @@ import socket
 import json
 from datetime import datetime, timezone
 
-CCP_PORT = 3028
-MCP_SERVER = ("10.20.30.1", 2001)
-CCP_UDP_SERVER = ("10.20.30.1", CCP_PORT)
+MCP_SERVER = ("10.20.30.177", 2000)
 BUFFER_SIZE = 1024
-
-# Notes:
-# Have not implemented anything to resolve losing connection to MCP. (What happens if we stop receiving status requests?)
 
 # Datagram socket, used for UDP connection.
 mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-mcp_client_socket.bind(CCP_UDP_SERVER)
 
 def get_current_timestamp():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00Z')
