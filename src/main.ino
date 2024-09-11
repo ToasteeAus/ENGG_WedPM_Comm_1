@@ -29,8 +29,15 @@ const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
 #define FAST_SPEED 255
-#define SLOW_SPEED 150
+#define SLOW_SPEED 75
 int atStation = 0;
+int currSpeed = 0;
+#define NUM_STEPS 5
+int currStep = 0;
+int accelerating = 0;
+int accelSpeeds[NUM_STEPS];
+int currDir = 1;
+unsigned long speedPMillis = 0;
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -129,32 +136,32 @@ void execFromCCP(JsonDocument &staticJson){
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "STOP"){
     setLEDStatus(0);
-    runMotor(0);
+    softAcceleration(0);
     setMotorDirection(1,1); 
     replydoc["ACK"] = "STOP_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "FORWARD_FAST"){
     setLEDStatus(1);
     setMotorDirection(0,1);
-    runMotor(FAST_SPEED);
+    softAcceleration(FAST_SPEED);
     replydoc["ACK"] = "FORWARD_FAST_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "FORWARD_SLOW"){
     setLEDStatus(2);
     setMotorDirection(0,1);
-    runMotor(SLOW_SPEED);
+    softAcceleration(SLOW_SPEED);
     replydoc["ACK"] = "FORWARD_SLOW_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "REVERSE_SLOW"){
     setLEDStatus(3);
     setMotorDirection(0,0);
-    runMotor(SLOW_SPEED);
+    softAcceleration(SLOW_SPEED);
     replydoc["ACK"] = "REVERSE_SLOW_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "REVERSE_FAST"){
     setLEDStatus(4);
     setMotorDirection(0,0);
-    runMotor(FAST_SPEED);
+    softAcceleration(FAST_SPEED);
     replydoc["ACK"] = "REVERSE_FAST_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "DOOR_OPEN"){
@@ -268,8 +275,25 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
-void softAcceleration(int currSpeed, int newSpeed){
+void softAcceleration(int newSpeed){
   //TODO add function to smooth out acceleration
+  int deltaSpeed = newSpeed - currSpeed;
+  if(deltaSpeed > 0){
+    accelerating = 1;
+    currStep = 0;
+    for(int i = 1; i<+NUM_STEPS; i++){
+      accelSpeeds[i-1] = currSpeed + (i*i*deltaSpeed)/(NUM_STEPS*NUM_STEPS);
+    }
+  } else if(deltaSpeed<0) {
+    accelerating = 1;
+    currStep = 0;
+    for(int i = 1; i<+NUM_STEPS; i++){
+      accelSpeeds[i-1] = currSpeed - (i*i*deltaSpeed)/(NUM_STEPS*NUM_STEPS);
+    }
+  } else{
+    accelerating = 0;
+  }
+  speedPMillis = millis();
 }
 
 void readPhotoresistor(WiFiClient &client){
@@ -278,6 +302,8 @@ void readPhotoresistor(WiFiClient &client){
   if(value > 450){
     runMotor(0);
     setMotorDirection(1, 1);
+    accelerating = 0;
+    currStep = 0;
     /*if(atStation == 0){
         if(client.connected() && client.available()){
           StaticJsonDocument<200> messageDoc;
@@ -334,7 +360,17 @@ void loop() {
   if (client.connected() and WiFi.isConnected()){
     // Listen to TCP Server for commands
     if (client.available()) {
-      //readPhotoresistor(client);
+      readPhotoresistor(client);
+      if(accelerating && millis() - speedPMillis > 200){ // runs in main loop so that it can use non blocking delay
+        if(currStep < NUM_STEPS){
+          runMotor(accelSpeeds[currStep]);
+          currSpeed = accelSpeeds[currStep];
+          currStep++;
+        } else {
+          accelerating = 0;
+          currStep = 0;
+        }
+      }
       // Read info from Python Server
       readFromCCP(staticJsonResponse);
 
