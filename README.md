@@ -5,7 +5,7 @@ This guide should help get your own local VSCode Workspace setup with the requir
 ## Setup
 
 1. Download [git](https://git-scm.com/downloads), and [VSCode](https://code.visualstudio.com/download) if you haven't already installed them on your machine.
-2. Download Python at Version [3.12.4](https://www.python.org/downloads/release/python-3124/)
+2. Download Python at Version [3.10.0](https://www.python.org/downloads/release/python-3100/)
 (To confirm your install, head to your terminal and insert either "python --version" or "python3 --version")
 3. Clone this repo to your local machine
 4. Open VSCode and select File > "Open Workspace from Folder"
