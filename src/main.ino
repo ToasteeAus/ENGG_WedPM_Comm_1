@@ -29,7 +29,7 @@ IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
 IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* serverIP = "10.20.30.199";  // Replace with the IP address of your local python server
+const char* serverIP = "10.20.30.1";  // Replace with the IP address of your local python server
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
@@ -292,18 +292,16 @@ void setMotorDirection(int disable, int direction){
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, HIGH);
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE HIGH
   } else {
-    digitalWrite(DIR_PIN, LOW);
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE LOW
   }
+
+  // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
 }
 
 void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
-}
-
-void softAcceleration(int currSpeed, int newSpeed){
-  //TODO add function to smooth out acceleration
 }
 
 void doorControlFlash(){
