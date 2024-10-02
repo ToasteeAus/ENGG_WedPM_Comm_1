@@ -34,9 +34,16 @@ const char* serverIP = "10.20.30.199";  // Replace with the IP address of your l
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
-#define FAST_SPEED 255
-#define SLOW_SPEED 150
-int atStation = 0;
+#define FAST_SPEED 250
+#define SLOW_SPEED 75
+int atStation = 0; // Think of culling for declutter
+int currSpeed = 0;
+#define NUM_STEPS 5
+int currStep = 0;
+int accelerating = 0;
+int accelSpeeds[NUM_STEPS];
+int currDir = 1;
+unsigned long speedPMillis = 0;
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -300,14 +307,54 @@ void setMotorDirection(int disable, int direction){
 }
 
 void runMotor(int speed){
+  if(speed == 0){
+    setMotorDirection(1,1);
+  }
   analogWrite(PWM_PIN, speed);
 }
 
-void softAcceleration(int currSpeed, int newSpeed){
+void softAcceleration(int newSpeed){
   //TODO add function to smooth out acceleration
+  int deltaSpeed = newSpeed - currSpeed;
+
+  if(deltaSpeed > 0){
+    accelerating = 1;
+    currStep = 0;
+
+    for(int i = 1; i < NUM_STEPS; i++){
+      accelSpeeds[i-1] = currSpeed + (i*i*deltaSpeed)/(NUM_STEPS*NUM_STEPS);
+    }
+    
+  } else if(deltaSpeed < 0) {
+    accelerating = 1;
+    currStep = 0;
+
+    for(int i = 1; i < NUM_STEPS; i++){
+      accelSpeeds[i-1] = currSpeed - (i * i * deltaSpeed)/(NUM_STEPS * NUM_STEPS);
+    }
+
+  } else{
+    accelerating = 0;
+  }
+  
+  speedPMillis = millis();
 }
 
-void readPhotoresistor(WiFiClient &client){
+void loopAcceleration(){
+  if(accelerating && millis() - speedPMillis > 200){ // runs in main loop so that it can use non blocking delay
+    if(currStep < NUM_STEPS){
+      runMotor(accelSpeeds[currStep]);
+      currSpeed = accelSpeeds[currStep];
+      currStep++;
+    } else {
+      accelerating = 0;
+      currStep = 0;
+    }
+    speedPMillis = millis();
+  }
+}
+
+void readPhotoresistor(){
   // IR Detector for Station Stop
   StaticJsonDocument<200> replydoc;
 
@@ -316,6 +363,8 @@ void readPhotoresistor(WiFiClient &client){
   if(value > 450){
     runMotor(0);
     setMotorDirection(1, 1);
+    accelerating = 0;
+    currStep = 0;
     /*if(atStation == 0){
         if(client.connected() && client.available()){
           StaticJsonDocument<200> messageDoc;
@@ -325,9 +374,9 @@ void readPhotoresistor(WiFiClient &client){
         }
     }
     */
-    replydoc.clear(); // TODO: DELETE THESE LINES BEFORE BRINGING INTO PRODUCTION
-    replydoc["ALERT"] = "STOPPED_AT_STATION";
 
+    replydoc.clear();
+    replydoc["ALERT"] = "STOPPED_AT_STATION";
     sendToCCP(replydoc, client);
 
     if(atStation == 1){
@@ -390,7 +439,10 @@ void loop() {
   if (client.connected() and WiFi.isConnected()){
     // Listen to TCP Server for commands
     if (client.available()) {
-      readPhotoresistor(client);
+      readPhotoresistor();
+
+      loopAcceleration();
+
       // Read info from Python Server
       readFromCCP(staticJsonResponse);
 
