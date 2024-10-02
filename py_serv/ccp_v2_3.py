@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 # Debug Information
-DEBUG = False
+DEBUG = True
 CLI_INFO = False
 HUMAN_INITIATED_EXIT = False
 
