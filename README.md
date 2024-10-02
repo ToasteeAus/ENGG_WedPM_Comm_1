@@ -44,4 +44,4 @@ Reverse, Fast - Solid Dark Blue
 Will fallover if MCP dies during operation -> this needs to be urgently resolved
 Doesn't check for health of ESP even if MCP isn't actively sending requests -> Unlikely in prod environment but can occur frequently in testing (However, ESP can connect freely)
 Cannot comprehend the LED IR Blink patterns -> near impossible and hoping the MCP teams are scrapping it
-If the ESP detects it is at a station we will send back status with no station id -> Could cause issues with MCP given how theyre implemented, will only know tmrw
+If the ESP detects it is at a station we will send back status with no station id -> Could cause issues with MCP given how theyre implemented, will only know tomorrow.

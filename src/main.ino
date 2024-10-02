@@ -34,6 +34,7 @@ const char *serverIP = "10.20.30.199"; // Replace with the IP address of your lo
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
+
 #define FAST_SPEED 250
 #define SLOW_SPEED 75
 int atStation = 0; // Think of culling for declutter
@@ -203,32 +204,33 @@ void execFromCCP(JsonDocument &staticJson)
   else if (staticJson["CMD"] == "FORWARD_FAST")
   {
     setLEDStatus(1);
-    setMotorDirection(0, 1);
-    runMotor(FAST_SPEED);
+    setMotorDirection(0,1);
+    softAcceleration(FAST_SPEED);
     replydoc["ACK"] = "FORWARD_FAST_OK";
     sendToCCP(replydoc, client);
   }
   else if (staticJson["CMD"] == "FORWARD_SLOW")
   {
     setLEDStatus(2);
-    setMotorDirection(0, 1);
-    runMotor(SLOW_SPEED);
+    setMotorDirection(0,1);
+    softAcceleration(SLOW_SPEED);
     replydoc["ACK"] = "FORWARD_SLOW_OK";
     sendToCCP(replydoc, client);
   }
   else if (staticJson["CMD"] == "REVERSE_SLOW")
   {
     setLEDStatus(3);
-    setMotorDirection(0, 0);
-    runMotor(SLOW_SPEED);
+    setMotorDirection(0,0);
+    softAcceleration(SLOW_SPEED);
     replydoc["ACK"] = "REVERSE_SLOW_OK";
     sendToCCP(replydoc, client);
   }
   else if (staticJson["CMD"] == "REVERSE_FAST")
   {
     setLEDStatus(4);
-    setMotorDirection(0, 0);
-    runMotor(FAST_SPEED);
+    setMotorDirection(0,0);
+    softAcceleration(FAST_SPEED);
+
     replydoc["ACK"] = "REVERSE_FAST_OK";
     sendToCCP(replydoc, client);
   }
@@ -372,6 +374,7 @@ void runMotor(int speed)
   analogWrite(PWM_PIN, speed);
 }
 
+
 void softAcceleration(int newSpeed)
 {
   // TODO add function to smooth out acceleration
@@ -401,7 +404,6 @@ void softAcceleration(int newSpeed)
   {
     accelerating = 0;
   }
-
   speedPMillis = millis();
 }
 
