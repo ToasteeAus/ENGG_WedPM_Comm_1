@@ -1,5 +1,4 @@
 #include <WiFi.h>
-#include <ArduinoJson.h>
 #include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -18,19 +17,19 @@
 #define NUM_PIXELS 4    // The number of LEDs in sequence
 
 // WiFi credentials
-const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
-const char* password = "";
+const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
+const char* password = "Test1234";
 
-// Static IP configuration
-IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
-IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
-IPAddress subnet(255, 255, 255, 0);   // Subnet mask
-IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
-IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
+// // Static IP configuration
+// IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
+// IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
+// IPAddress subnet(255, 255, 255, 0);   // Subnet mask
+// IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
+// IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* serverIP = "10.20.30.1";  // Replace with the IP address of your local python server
-const uint16_t serverPort = 3028;
+const char* ccpIP = "192.168.249.151";  // Replace with the IP address of your local python server
+const uint16_t ccpPort = 3028;
 
 // Station and Motor Speeds
 int fast_speed = 255;
@@ -42,174 +41,112 @@ Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
 WiFiClient client;
 Servo door;
 
-// Core Comms Functions //
+// 0x00 - STOP, 0x01 - FORWARD, SLOW, 0x02 - FORWARD, FAST, 0x03 - REVERSE, SLOW, 
+// 0x04 - REVERSE, FAST, 0x05 - DOORS, OPEN, 0x06 - DOORS, CLOSE
+
+// Custom Byte Codes
+// 0x07 - SetSlowSpeed ex. 0x07 0xFF -> Slow Speed set to 255
+// 0x08 - SetFastSpeed ex 0x08 0xFF -> Fast Speed set to 255
+// 0x09 - SetLightColour ex 0x09 0xFF 0xFF 0xFF -> Set LED Colour to rgb(255,255,255)
+
+// Tasks //
+
+TaskHandle_t FlashLEDTask;
+
+// Helpers //
+
+// This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
+void delayButNotDelay(int delayTimeInMs){
+  // Input "delay" time in ms
+  uint64_t timer = esp_timer_get_time();
+  uint64_t pretime = esp_timer_get_time();
+  uint64_t t = 0;
+
+  while (t != delayTimeInMs){
+    if(timer - pretime >= 1000) { // 1ms
+      t++;
+      pretime = timer;
+    }
+    timer = esp_timer_get_time();
+  }
+}
+
+// WiFi //
+
+void wifiEventListener(WiFiEvent_t event){
+  switch (event) {
+      case ARDUINO_EVENT_WIFI_READY: 
+          Serial.println("WiFi interface ready");
+          break;
+      case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+          Serial.println("Connected to ENGG2K3K Network");
+          vTaskDelete(FlashLEDTask);
+          break;
+      case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+          Serial.println("Disconnected from ENGG2K3K Network\nAttempting to reconnect\n");
+          WiFi.begin(ssid, password);
+          break;
+      case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+          Serial.print("Received IP Address: ");
+          Serial.println(WiFi.localIP());
+          break;
+      default: break;
+  }
+}
 
 void setupWifi(){
-  // Connect to Wi-Fi
-  Serial.print("WiFi: Connecting");
-  // WiFi.config(10.20.30.128) // forces the ESP32 to use our given IP address
-  if (!WiFi.isConnected()){ // solely to protect against erroneous calls
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-      LEDFlash(255, 40, 0);
-    }
+  WiFi.disconnect(true); // Turn off and clear from last instance
+  delay(500);
+  WiFi.onEvent(wifiEventListener);
 
-    if(!WiFi.config(staticIP, gateway, subnet, primaryDNS, secondaryDNS)) {
-      Serial.println("Failed to configure Static IP");
-    } else {
-      Serial.println("Static IP configured!");
-      Serial.println(WiFi.localIP());
-    }
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(ssid, password);
+  Serial.println("Waiting to Connect");
 
-  Serial.println("\nWiFi: Connected");
-  }
+  xTaskCreatePinnedToCore(
+                  wifiFlashLED,   /* Task function. */
+                  "WifiFlashLED",     /* name of task. */
+                  2048,       /* Stack size of task */
+                  NULL,        /* parameter of the task */
+                  1,           /* priority of the task */
+                  &FlashLEDTask,      /* Task handle to keep track of created task */
+                  0);          /* pin task to core 0 */ 
 }
 
 void setupCCP(){
   Serial.print("CCP: Connecting");
 
-  while(!client.connected()){
-    if (!WiFi.isConnected()){ // Prevent issues with socket failing with WiFi dying during connection
-      setupWifi();
-    } else {
-      try{
-        client.connect(serverIP, serverPort, 250);
-      } catch (...){
+  xTaskCreatePinnedToCore(
+                    CCPFlashLED,   /* Task function. */
+                    "CCPFlashLED",     /* name of task. */
+                    2048,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &FlashLEDTask,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */ 
 
-      }
+  while(!client.connected()){
+    try{
+      client.connect(ccpIP, ccpPort, 250);
+    } catch (...){
+
     }
-    delay(250); // Simply to ease the flashing and reduce Serial Monitor logs
-    Serial.print(".");
-    LEDFlash(0, 0, 255);
   }
+
+  vTaskDelete(FlashLEDTask);
   Serial.println("\nCCP: Connected");
   setLEDStatus(99);
 }
 
-void setupNetworks(){
-  setupWifi();
-  setupCCP();
-}
-
-// Main Execution Logic //
-
-void readFromCCP(JsonDocument &staticJson){
-  // We assume we are connected by this point
-
-  // Buffer for receiving JSON data
-  static char buffer[512];
-  // Read the incoming JSON data
-  int length = client.readBytesUntil('\n', buffer, sizeof(buffer));
-  buffer[length] = '\0'; // Null-terminate the string
-
-  DeserializationError error = deserializeJson(staticJson, buffer);
-
-  if (error) {
-    Serial.print("Failed to parse JSON: ");
-    Serial.println(error.c_str());
-  } else {
-    // Print the parsed JSON data
-    Serial.println("Received JSON:");
-    serializeJsonPretty(staticJson, Serial);
-    Serial.println();
+void checkNetworkStatus(){
+  if(!WiFi.isConnected()){
+    setupWifi();
   }
-}
 
-void sendToCCP(JsonDocument &staticJson, WiFiClient &client){
-  // Serialize JSON data to a string
-  String json_data;
-  serializeJson(staticJson, json_data);
-
-  // Send the JSON data to the server
-  client.print(json_data);
-
-  Serial.println("Sent JSON to server:");
-  Serial.println(json_data);
-}
-
-void execFromCCP(JsonDocument &staticJson){
-  StaticJsonDocument<200> replydoc;
-
-  // due to the unfortunate nature of C++ not recognising strings for switch statements, here is this mess
-  // For Collisions that the ESP detect, send the following message structure:
-  // {"ALERT":"COLLISION"}
-  if(staticJson["CMD"] == "SETUP"){
-    setLEDStatus(0);
-    runMotor(0);
-    setMotorDirection(1,1); 
-    replydoc["ACK"] = "SETUP_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "LIGHT"){ // Only here for testing lighting options in static offsite tests
-    
-    int red = staticJson["RED"];
-    int green = staticJson["GREEN"];
-    int blue = staticJson["BLUE"];
-
-    for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
-      NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
-    }
-    NeoPixel.show();
-
-    replydoc["ACK"] = "LIGHT_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "STATUS"){
-    replydoc["ACK"] = "NORMINAL";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "STOP"){
-    setLEDStatus(0);
-    runMotor(0);
-    setMotorDirection(1,1); 
-    replydoc["ACK"] = "STOP_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "SLOWSPEEDSET"){
-    slow_speed = int(staticJson["SPEED"]);
-    replydoc["ACK"] = "SLOWSPEEDSET_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "FASTSPEEDSET"){
-    fast_speed = int(staticJson["SPEED"]);
-    replydoc["ACK"] = "FASTSPEEDSET_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "FORWARD_FAST"){
-    setLEDStatus(1);
-    setMotorDirection(0,1);
-    runMotor(fast_speed);
-    replydoc["ACK"] = "FORWARD_FAST_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "FORWARD_SLOW"){
-    setLEDStatus(2);
-    setMotorDirection(0,1);
-    runMotor(slow_speed);
-    replydoc["ACK"] = "FORWARD_SLOW_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "REVERSE_SLOW"){
-    setLEDStatus(3);
-    setMotorDirection(0,0);
-    runMotor(slow_speed);
-    replydoc["ACK"] = "REVERSE_SLOW_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "REVERSE_FAST"){
-    setLEDStatus(4);
-    setMotorDirection(0,0);
-    runMotor(fast_speed);
-    replydoc["ACK"] = "REVERSE_FAST_OK";
-    sendToCCP(replydoc, client);
-  } else if (staticJson["CMD"] == "DOOR_OPEN"){
-    replydoc["ACK"] = "DOOR_OPEN_OK";
-    sendToCCP(replydoc, client);
-
-    doorControl(1);
-    setLEDStatus(5);
-  } else if (staticJson["CMD"] == "DOOR_CLOSE"){
-    replydoc["ACK"] = "DOOR_CLOSE_OK"; // Unique Bug, if this reply is set to fire after the door control event + status LED, the CCP timesout too long after its complete
-    sendToCCP(replydoc, client);
-
-    doorControl(-1);
-    setLEDStatus(0);
+  if(!client.connected()){
+    setupCCP();
   }
-  
-  replydoc.clear();
 }
 
 // Hardware Functions //
@@ -220,38 +157,40 @@ void setupLEDS(){
   NeoPixel.setBrightness(50); // so they don't blind us
 }
 
-void LEDFlash(int red, int green, int blue){
+void LEDFlash(int state){
   // Entire function is dedicated to creating a bluetooth pairing like flash
   static int flashon = 0;
+
   if (flashon == 0){
     flashon = 1;
-    for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
-      NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
-    }
+    setLEDStatus(state);
+
   } else {
     flashon = 0;
     NeoPixel.clear();
   }
+
   NeoPixel.show();
 }
 
-void setLEDStatus(int status){
+void setLEDStatus(int state){
   static int red, green, blue;
-  switch (status){
+
+  switch (state){
     case 0: // STOP - Red
       red = 255;
       green = 0;
       blue = 0;
       break;
-    case 1: // FORWARD-FAST - Green
-      red =  50;
-      green = 200;
-      blue = 0;
-      break;
-    case 2: // FORWARD-SLOW - Lighter Green/Aquamarine-y
+    case 1: // FORWARD-SLOW - Lighter Green/Aquamarine-y
       red = 0;
       green = 255;
       blue = 40;
+      break;
+    case 2: // FORWARD-FAST - Green
+      red =  50;
+      green = 200;
+      blue = 0;
       break;
     case 3: // REVERSE-SLOW - Light Blue (lighter = slow)
       red = 0;
@@ -273,6 +212,11 @@ void setLEDStatus(int status){
       green = 40;
       blue = 0;
       break;
+    case 98: // DISCONNECTED, Not connected to Wifi
+      red = 255;
+      green = 40;
+      blue = 0;
+      break;
     case 99: // CONNECTED, no commands sent - BLUE
       red = 0;
       green = 0;
@@ -289,6 +233,7 @@ void setLEDStatus(int status){
   for (int pixel = 0; pixel < NUM_PIXELS; pixel++){
     NeoPixel.setPixelColor(pixel, NeoPixel.Color(red, green, blue));
   }
+
   NeoPixel.show();
 }
 
@@ -315,13 +260,12 @@ void runMotor(int speed){
 void doorControlFlash(){
   // Sets a delay of 5000ms but allows for flashing lights to occur during this period purely for style
   for(int i = 0; i < 10; i++){
-    LEDFlash(255, 60, 0);
+    LEDFlash(6);
     delay(500);
   }
 }
 
 void doorControl(int direction) {
- 
   if (direction == 1) { // door open; moves in clockwise direction
     door.write(45);
     //delay(5000); // rotates for 5 seconds
@@ -333,53 +277,129 @@ void doorControl(int direction) {
     //delay(5000); // rotates for 5 seconds
     doorControlFlash();
     door.write(90); // stops
-    }
+  }
 }
 
-void readUltrasonic(){
-  // Emptying, TODO: 
+
+// LED Flashes //
+
+void wifiFlashLED(void * parameter){
+  for(;;){
+    LEDFlash(98);
+    delay(500);
+  }
+}
+
+void CCPFlashLED(void * parameter){
+  for(;;){
+    LEDFlash(99);
+    delay(500);
+  }
+}
+
+// ESP Actions //
+
+void stop(){
+  setLEDStatus(0);
+
+  setMotorDirection(1,1); 
+  runMotor(0);
+  Serial.println("Stop Command");
+}
+
+void forwardSlow(){
+  setLEDStatus(1);
+
+  setMotorDirection(0,1);
+  runMotor(slow_speed);
+  Serial.println("Forward Slow Command");
+}
+
+void forwardFast(){
+  setLEDStatus(2);
+
+  setMotorDirection(0,1);
+  runMotor(fast_speed);
+  Serial.println("Forward Fast Command");
+}
+
+void reverseSlow(){
+  setLEDStatus(3);
+
+  setMotorDirection(0,0);
+  runMotor(slow_speed);
+  Serial.println("Reverse Slow Command");
+}
+
+void reverseFast(){
+  setLEDStatus(4);
+
+  setMotorDirection(0,0);
+  runMotor(fast_speed);
+  Serial.println("Reverse Fast Command");
+}
+
+void doorsOpen(){
+  doorControl(1);
+  setLEDStatus(5);
+  Serial.println("Doors Open Command");
+}
+
+void doorsClose(){
+  doorControl(-1);
+  setLEDStatus(6);
+  Serial.println("Doors Close Command");
+}
+
+// CCP Listening //
+void decipherCCPCommand(){
+  if(client.available() && WiFi.isConnected()){
+    uint8_t data = client.read();  // Read a byte
+
+    switch(data){
+      case 0:
+        stop();
+        break;
+      case 1:
+        forwardSlow();
+        break;
+      case 2:
+        forwardFast();
+        break;
+      case 3:
+        reverseSlow();
+        break;
+      case 4:
+        reverseFast();
+        break;
+      case 5:
+        doorsOpen();
+        break;
+      case 6:
+        doorsClose();
+        break;
+      default:
+        Serial.printf("Unknown ByteCode: 0x%02X\n", data);
+        break;
+    }
+  }
 }
 
 // Arduino/ESP Required Functions //
 
 void setup() {
-  // Initialize Serial
   Serial.begin(115200);
   setupLEDS();
+  setupWifi();
 
-  door.attach(DOOR_PIN); // for controlling the door operations
-  // set motor pins to outputs
-  pinMode(DIS_PIN, OUTPUT); 
-  pinMode(DIR_PIN, OUTPUT);
-  pinMode(PWM_PIN, OUTPUT);
-
-  // Add in self testing code ->
-  // Check for existence of LEDs, Sensors, Motors etc.
-  // Debug statement sent in SETUP_OK or using LED status lights
-
-  setupNetworks();
+  while(!WiFi.isConnected()){} // Blocking wait for WiFi before attempting CCP connection
+  setupCCP();
 }
 
 void loop() {
-  StaticJsonDocument<512> staticJsonResponse;
+  // Check Health Status
+  checkNetworkStatus();
 
-  if (client.connected() and WiFi.isConnected()){
-    // Listen to TCP Server for commands
-    if (client.available()) {
-      // Read info from Python Server
-      readFromCCP(staticJsonResponse);
-
-      if (!staticJsonResponse.isNull()){
-        execFromCCP(staticJsonResponse);
-      }
-    }
-    // Technically a clear isn't necessary but this prevents any leftover json data from our next read cycle
-    staticJsonResponse.clear();
-  } else {
-    // WiFi or CCP have died, check both
-    Serial.println("URGENT: LOST COMMS, RE-ESTABLISHING");
-    runMotor(0);
-    setMotorDirection(1, 1);
-    setupNetworks();
-  }
+  // Execute Commands Received
+  decipherCCPCommand();
 }
