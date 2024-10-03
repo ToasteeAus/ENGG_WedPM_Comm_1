@@ -33,8 +33,8 @@ const char* serverIP = "10.20.30.1";  // Replace with the IP address of your loc
 const uint16_t serverPort = 3028;
 
 // Station and Motor Speeds
-#define FAST_SPEED 255
-#define SLOW_SPEED 150
+int fast_speed = 255;
+int slow_speed = 150;
 int atStation = 0;
 
 // Class Object Constructors
@@ -163,28 +163,36 @@ void execFromCCP(JsonDocument &staticJson){
     setMotorDirection(1,1); 
     replydoc["ACK"] = "STOP_OK";
     sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "SLOWSPEEDSET"){
+    slow_speed = int(staticJson["SPEED"]);
+    replydoc["ACK"] = "SLOWSPEEDSET_OK";
+    sendToCCP(replydoc, client);
+  } else if (staticJson["CMD"] == "FASTSPEEDSET"){
+    fast_speed = int(staticJson["SPEED"]);
+    replydoc["ACK"] = "FASTSPEEDSET_OK";
+    sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "FORWARD_FAST"){
     setLEDStatus(1);
     setMotorDirection(0,1);
-    runMotor(FAST_SPEED);
+    runMotor(fast_speed);
     replydoc["ACK"] = "FORWARD_FAST_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "FORWARD_SLOW"){
     setLEDStatus(2);
     setMotorDirection(0,1);
-    runMotor(SLOW_SPEED);
+    runMotor(slow_speed);
     replydoc["ACK"] = "FORWARD_SLOW_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "REVERSE_SLOW"){
     setLEDStatus(3);
     setMotorDirection(0,0);
-    runMotor(SLOW_SPEED);
+    runMotor(slow_speed);
     replydoc["ACK"] = "REVERSE_SLOW_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "REVERSE_FAST"){
     setLEDStatus(4);
     setMotorDirection(0,0);
-    runMotor(FAST_SPEED);
+    runMotor(fast_speed);
     replydoc["ACK"] = "REVERSE_FAST_OK";
     sendToCCP(replydoc, client);
   } else if (staticJson["CMD"] == "DOOR_OPEN"){

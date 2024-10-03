@@ -309,6 +309,22 @@ def esp_light(red, green, blue):
     
     send_esp_msg(setup_msg)
 
+def esp_setSlowSpeed(slowSpeed):
+    setup_msg = {
+        "CMD":"SLOWSPEEDSET",
+        "SPEED": slowSpeed
+    }
+    
+    send_esp_msg(setup_msg)
+    
+def esp_setFastSpeed(fastSpeed):
+    setup_msg = {
+        "CMD":"FASTSPEEDSET",
+        "SPEED": fastSpeed
+    }
+    
+    send_esp_msg(setup_msg)
+
 # Core Thread Functions
 
 def parse_esp_response():
@@ -471,6 +487,18 @@ def remote_cli_test():
                     esp_reverse_slow()
                 case "stop" | "e-stop":
                     esp_stop()
+                case "set-slow-speed" | "setslow":
+                    if len(raw) == 2:
+                        # Speed val
+                        esp_setSlowSpeed(int(raw[1]))
+                    else:
+                        print("The Speed command expects 1 whitespace separate speed valye.\nex: setslow 9\n")
+                case "set-fast-speed" | "setfast":
+                    if len(raw) == 2:
+                        # Speed val
+                        esp_setFastSpeed(int(raw[1]))
+                    else:
+                        print("The Speed command expects 1 whitespace separate speed valye.\nex: setfast 9\n")
                 case "door-open":
                     esp_door_open()
                 case "door-close":
@@ -482,6 +510,8 @@ def remote_cli_test():
                     print("reverse-fast:\nreversefast:\nreverse: -> move BladeRunner reverse, fast\n")
                     print("forward-slow:\nforwardslow: -> move BladeRunner forwards, slow\n")
                     print("stop:\ne-stop: -> stops BladeRunner\n")
+                    print("set-fast-speed:\nsetfast: -> Set Fast Speed of the BladeRunner in operation\n")
+                    print("set-slow-speed:\nsetslow: -> Set Slow Speed of the BladeRunner in operation\n")
                     print("door-open: -> opens BladeRunner doors\n")
                     print("door-close: -> closes BladeRunner doors\n")
                     print("q:\nquit:\nexit: -> exits from BladeRunner Command Line Interaction Tool\n")
