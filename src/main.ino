@@ -10,7 +10,12 @@
 #define DIS_PIN 15
 #define DIR_PIN 13
 #define PWM_PIN 12
-#define DOOR_PIN 25
+
+#define R_DOOR_PIN 23
+#define L_DOOR_PIN 27
+#define R_DOOR_SENSE_PIN 35
+#define L_DOOR_SENSE_PIN 34
+
 #define PIN_NEO_PIXEL 4
 
 // Status LEDs
@@ -28,7 +33,7 @@ const char* password = "Test1234";
 // IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "192.168.249.151";  // Replace with the IP address of your local python server
+const char* ccpIP = "192.168.249.177";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Station and Motor Speeds
@@ -39,7 +44,8 @@ int atStation = 0;
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
 WiFiClient client;
-Servo door;
+Servo leftdoor;
+Servo rightdoor;
 
 // 0x00 - STOP, 0x01 - FORWARD, SLOW, 0x02 - FORWARD, FAST, 0x03 - REVERSE, SLOW, 
 // 0x04 - REVERSE, FAST, 0x05 - DOORS, OPEN, 0x06 - DOORS, CLOSE
@@ -150,6 +156,14 @@ void checkNetworkStatus(){
 }
 
 // Hardware Functions //
+
+void setupDoorServos(){
+  pinMode(L_DOOR_SENSE_PIN, INPUT);
+  pinMode(R_DOOR_SENSE_PIN, INPUT);
+  leftdoor.attach(L_DOOR_PIN);
+  rightdoor.attach(R_DOOR_PIN);
+}
+
 void setupLEDS(){
   NeoPixel.begin();
   NeoPixel.clear(); // once setup, wipe any colour that could be residually there from previous calls
@@ -265,21 +279,25 @@ void doorControlFlash(){
   }
 }
 
-void doorControl(int direction) {
-  if (direction == 1) { // door open; moves in clockwise direction
-    door.write(45);
-    //delay(5000); // rotates for 5 seconds
-    doorControlFlash();
-    door.write(90); // stops
-    } 
-  else if (direction == -1) { // door close; moves in anticlockwise direction
-    door.write(135);
-    //delay(5000); // rotates for 5 seconds
-    doorControlFlash();
-    door.write(90); // stops
+void doorControl(int direction)
+{
+  if (direction == 1)
+  { // door open; moves in clockwise direction
+    leftdoor.write(45);
+    rightdoor.write(45);
+    delay(5000); // rotates for 5 seconds
+    leftdoor.write(90);
+    rightdoor.write(90); // stops
+  }
+  else if (direction == -1)
+  { // door close; moves in anticlockwise direction
+    leftdoor.write(135);
+    rightdoor.write(135);
+    delay(5000); // rotates for 5 seconds
+    leftdoor.write(90); // stops
+    rightdoor.write(90);
   }
 }
-
 
 // LED Flashes //
 
@@ -390,6 +408,7 @@ void decipherCCPCommand(){
 void setup() {
   Serial.begin(115200);
   setupLEDS();
+  setupDoorServos();
   setupWifi();
 
   while(!WiFi.isConnected()){} // Blocking wait for WiFi before attempting CCP connection
