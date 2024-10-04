@@ -25,6 +25,10 @@
 const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
 const char* password = "Test1234";
 
+// WiFi/Client status ints
+int wifiReconnecting = 0;
+int ccpReconnecting = 0;
+
 // // Static IP configuration
 // IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
 // IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
@@ -33,7 +37,7 @@ const char* password = "Test1234";
 // IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "192.168.249.177";  // Replace with the IP address of your local python server
+const char* ccpIP = "192.168.234.177";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Station and Motor Speeds
@@ -53,7 +57,10 @@ Servo rightdoor;
 // Custom Byte Codes
 // 0x07 - SetSlowSpeed ex. 0x07 0xFF -> Slow Speed set to 255
 // 0x08 - SetFastSpeed ex 0x08 0xFF -> Fast Speed set to 255
-// 0x09 - SetLightColour ex 0x09 0xFF 0xFF 0xFF -> Set LED Colour to rgb(255,255,255)
+
+// Custom Byte Code Variables //
+
+int newSpeed;
 
 // Tasks //
 
@@ -82,33 +89,32 @@ void delayButNotDelay(int delayTimeInMs){
 void wifiEventListener(WiFiEvent_t event){
   switch (event) {
       case ARDUINO_EVENT_WIFI_READY: 
-          Serial.println("WiFi interface ready");
+          Serial.println("WiFi: Interface ready");
           break;
       case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-          Serial.println("Connected to ENGG2K3K Network");
+          Serial.println("WiFi: Connected to ENGG2K3K Network");
           vTaskDelete(FlashLEDTask);
           break;
       case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-          Serial.println("Disconnected from ENGG2K3K Network\nAttempting to reconnect\n");
+          Serial.println("WiFi: Disconnected from ENGG2K3K Network, Attempting to reconnect\n");
+          setMotorDirection(1,1); 
+          runMotor(0);
+          // stop without our funny lil LEDs
+
           WiFi.begin(ssid, password);
           break;
       case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-          Serial.print("Received IP Address: ");
+          Serial.print("WiFi: Received IP Address: ");
           Serial.println(WiFi.localIP());
           break;
       default: break;
   }
 }
 
-void setupWifi(){
-  WiFi.disconnect(true); // Turn off and clear from last instance
-  delay(500);
-  WiFi.onEvent(wifiEventListener);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
+void reconnectWifi(){
+  wifiReconnecting = 1;
   WiFi.begin(ssid, password);
-  Serial.println("Waiting to Connect");
+  Serial.println("WiFi: Connecting");
 
   xTaskCreatePinnedToCore(
                   wifiFlashLED,   /* Task function. */
@@ -118,9 +124,24 @@ void setupWifi(){
                   1,           /* priority of the task */
                   &FlashLEDTask,      /* Task handle to keep track of created task */
                   0);          /* pin task to core 0 */ 
+  
+  while(!WiFi.isConnected()){}
+
+  wifiReconnecting = 0;
+}
+
+void setupWifi(){
+  WiFi.disconnect(true); // Turn off and clear from last instance
+  delay(500);
+  WiFi.onEvent(wifiEventListener);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  reconnectWifi();
 }
 
 void setupCCP(){
+  ccpReconnecting = 1;
   Serial.print("CCP: Connecting");
 
   xTaskCreatePinnedToCore(
@@ -132,17 +153,39 @@ void setupCCP(){
                     &FlashLEDTask,      /* Task handle to keep track of created task */
                     0);          /* pin task to core 0 */ 
 
-  while(!client.connected()){
+  while(!client.connected() && WiFi.isConnected()){
     try{
       client.connect(ccpIP, ccpPort, 250);
-    } catch (...){
-
-    }
+    } catch (...){}
   }
 
   vTaskDelete(FlashLEDTask);
-  Serial.println("\nCCP: Connected");
-  setLEDStatus(99);
+  
+  // Logic purely here for the case where WiFi drops before we can contact the CCP
+  if(WiFi.isConnected()){
+    Serial.println("\nCCP: Connected");
+    setLEDStatus(99);
+  } else {
+    reconnectWifi();
+  }
+  
+  ccpReconnecting = 0;
+}
+
+void sendAckToCCP(uint8_t byteCode){
+  uint8_t hexAckData[] = {0xAA, byteCode};
+
+  client.write(hexAckData, sizeof(hexAckData));
+
+  Serial.printf("ESP: Sent ACK to CCP Server: 0x%02X\n", byteCode);
+}
+
+void sendAlertToCCP(uint8_t alertCode){
+  uint8_t hexAlertData[] = {0xFF, alertCode};
+
+  client.write(hexAlertData, sizeof(hexAlertData));
+
+  Serial.printf("ESP: Sent ALERT to CCP Server: 0x%02X\n", alertCode);
 }
 
 void checkNetworkStatus(){
@@ -285,7 +328,8 @@ void doorControl(int direction)
   { // door open; moves in clockwise direction
     leftdoor.write(45);
     rightdoor.write(45);
-    delay(5000); // rotates for 5 seconds
+    //delay(5000); // rotates for 5 seconds
+    doorControlFlash();
     leftdoor.write(90);
     rightdoor.write(90); // stops
   }
@@ -293,7 +337,8 @@ void doorControl(int direction)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
     rightdoor.write(135);
-    delay(5000); // rotates for 5 seconds
+    //delay(5000); // rotates for 5 seconds
+    doorControlFlash();
     leftdoor.write(90); // stops
     rightdoor.write(90);
   }
@@ -369,9 +414,20 @@ void doorsClose(){
   Serial.println("Doors Close Command");
 }
 
+void setFastSpeed(int newSpeed){
+  //fast_speed = newSpeed;
+  Serial.printf("Updated Fast Speed to: %d\n", newSpeed);
+}
+
+void setSlowSpeed(int newSpeed){
+  //slow_speed = newSpeed;
+  Serial.printf("Updated Slow Speed to: %d\n", newSpeed);
+}
+
 // CCP Listening //
+
 void decipherCCPCommand(){
-  if(client.available() && WiFi.isConnected()){
+  if(client.connected() and client.available()){
     uint8_t data = client.read();  // Read a byte
 
     switch(data){
@@ -396,10 +452,28 @@ void decipherCCPCommand(){
       case 6:
         doorsClose();
         break;
+      case 7:
+        while(!client.available()){}
+        newSpeed = client.read();
+        setSlowSpeed(newSpeed);
+        break;
+      case 8:
+        while(!client.available()){}
+        newSpeed = client.read();
+        setFastSpeed(newSpeed);
+        break;
       default:
         Serial.printf("Unknown ByteCode: 0x%02X\n", data);
         break;
     }
+
+    if (data >= 0 && data <= 8){
+      sendAckToCCP(data);
+    }
+  }
+
+  if(!client.connected()){
+    setupCCP();
   }
 }
 
@@ -416,9 +490,11 @@ void setup() {
 }
 
 void loop() {
-  // Check Health Status
-  checkNetworkStatus();
+  if (wifiReconnecting == 0 and ccpReconnecting == 0){
+    // Check Health Status
+    checkNetworkStatus();
 
-  // Execute Commands Received
-  decipherCCPCommand();
+    // Execute Commands Received
+    decipherCCPCommand();
+  }
 }
