@@ -4,6 +4,7 @@
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
+  Remove all Serial statements when we produce the production variant of this code with all systems operational
 */
 
 // Pin definitions
@@ -61,6 +62,7 @@ Servo rightdoor;
 // Custom Byte Code Variables //
 
 int newSpeed;
+bool disconnected = false;
 
 // Tasks //
 
@@ -360,6 +362,13 @@ void CCPFlashLED(void * parameter){
   }
 }
 
+void DisconnectFlashLED(void * parameter){
+  for(;;){
+    LEDFlash(0);
+    delay(500);
+  }
+}
+
 // ESP Actions //
 
 void stop(){
@@ -403,13 +412,13 @@ void reverseFast(){
 }
 
 void doorsOpen(){
-  doorControl(1);
+  //doorControl(1); // TODO: IMPROVE TIMING OF DOORCONTROL CMD
   setLEDStatus(5);
   Serial.println("Doors Open Command");
 }
 
 void doorsClose(){
-  doorControl(-1);
+  //doorControl(-1);
   setLEDStatus(6);
   Serial.println("Doors Close Command");
 }
@@ -422,6 +431,22 @@ void setFastSpeed(int newSpeed){
 void setSlowSpeed(int newSpeed){
   //slow_speed = newSpeed;
   Serial.printf("Updated Slow Speed to: %d\n", newSpeed);
+}
+
+void disconnect(){
+  setMotorDirection(1,1); 
+  runMotor(0);
+  disconnected = true;
+  Serial.print("Awaiting Removal from Track");
+  xTaskCreatePinnedToCore(
+                  DisconnectFlashLED,   /* Task function. */
+                  "DisconnectFlashLED",     /* name of task. */
+                  2048,       /* Stack size of task */
+                  NULL,        /* parameter of the task */
+                  1,           /* priority of the task */
+                  &FlashLEDTask,      /* Task handle to keep track of created task */
+                  0);          /* pin task to core 0 */ 
+  
 }
 
 // CCP Listening //
@@ -462,6 +487,9 @@ void decipherCCPCommand(){
         newSpeed = client.read();
         setFastSpeed(newSpeed);
         break;
+      case 0xFF:
+        disconnect();
+        break;
       default:
         Serial.printf("Unknown ByteCode: 0x%02X\n", data);
         break;
@@ -471,8 +499,8 @@ void decipherCCPCommand(){
       sendAckToCCP(data);
     }
   }
-
-  if(!client.connected()){
+  
+  if(!client.connected() and disconnected == false){
     setupCCP();
   }
 }
@@ -490,11 +518,13 @@ void setup() {
 }
 
 void loop() {
-  if (wifiReconnecting == 0 and ccpReconnecting == 0){
-    // Check Health Status
-    checkNetworkStatus();
+  if (disconnected == false){
+    if (wifiReconnecting == 0 and ccpReconnecting == 0){
+      // Check Health Status
+      checkNetworkStatus();
 
-    // Execute Commands Received
-    decipherCCPCommand();
+      // Execute Commands Received
+      decipherCCPCommand();
+    }
   }
 }

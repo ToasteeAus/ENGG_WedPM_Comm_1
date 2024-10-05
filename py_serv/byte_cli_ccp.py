@@ -227,8 +227,6 @@ def esp_parser(hex_data):
         logging.warning(f"Received malformed reply back from ESP: {hex_data}")
 
 def esp_listener_thread():
-    global ESP_SENT_Q
-    
     while not HUMAN_INITIATED_EXIT:
         data = ""      
         try:
@@ -260,7 +258,6 @@ def main_logic():
     
     remote_cli()
     thread1.join()
-    
     
 if __name__ == '__main__':
     main_logic()
