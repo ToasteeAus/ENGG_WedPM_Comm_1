@@ -148,6 +148,7 @@ def send_esp_msg(data_to_send):
     
     sent = False
     while sent == False:
+        # TODO: Add in check if the SENT Queue is empty, if it is then we can send, otherwise hold cmd, only required if weird behaviour occurs
         if esp_client_socket is not None:
             try:
                 esp_client_socket.sendall(byte_data)

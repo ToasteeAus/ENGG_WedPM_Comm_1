@@ -38,7 +38,7 @@ int ccpReconnecting = 0;
 // IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "192.168.234.177";  // Replace with the IP address of your local python server
+const char* ccpIP = "192.168.181.177";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Station and Motor Speeds
@@ -67,6 +67,7 @@ bool disconnected = false;
 // Tasks //
 
 TaskHandle_t FlashLEDTask;
+TaskHandle_t DoorTaskHandle;
 
 // Helpers //
 
@@ -316,34 +317,41 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
-void doorControlFlash(){
-  // Sets a delay of 5000ms but allows for flashing lights to occur during this period purely for style
-  for(int i = 0; i < 10; i++){
-    LEDFlash(6);
-    delay(500);
-  }
-}
-
-void doorControl(int direction)
+void doorControl(void *parameter)
 {
+  int direction = *(int *)parameter;
+
   if (direction == 1)
   { // door open; moves in clockwise direction
     leftdoor.write(45);
     rightdoor.write(45);
-    //delay(5000); // rotates for 5 seconds
-    doorControlFlash();
+
+    // This internal loop needs to become a while loop checking for if the microswitch is contacted or not
+    for(int i = 0; i < 10; i++){
+      LEDFlash(6);
+      delay(500);
+    }
+
     leftdoor.write(90);
     rightdoor.write(90); // stops
+    setLEDStatus(5);
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
     rightdoor.write(135);
-    //delay(5000); // rotates for 5 seconds
-    doorControlFlash();
+
+    for(int i = 0; i < 10; i++){
+      LEDFlash(6);
+      delay(500);
+    }
+
     leftdoor.write(90); // stops
     rightdoor.write(90);
+    setLEDStatus(6);
   }
+  
+  vTaskDelete(NULL);
 }
 
 // LED Flashes //
@@ -351,14 +359,14 @@ void doorControl(int direction)
 void wifiFlashLED(void * parameter){
   for(;;){
     LEDFlash(98);
-    delay(500);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
 
 void CCPFlashLED(void * parameter){
   for(;;){
     LEDFlash(99);
-    delay(500);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
 
@@ -412,14 +420,32 @@ void reverseFast(){
 }
 
 void doorsOpen(){
-  //doorControl(1); // TODO: IMPROVE TIMING OF DOORCONTROL CMD
-  setLEDStatus(5);
+  int direction = 1;
+  // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
+  xTaskCreate(
+        doorControl,   
+        "DoorControl",   
+        2048,               
+        &direction,               
+        1,                  
+        &DoorTaskHandle    
+  );
+
+  
   Serial.println("Doors Open Command");
 }
 
 void doorsClose(){
-  //doorControl(-1);
-  setLEDStatus(6);
+  int direction = -1;
+  xTaskCreate(
+        doorControl,   
+        "DoorControl",    
+        2048,               
+        &direction,           
+        1,                  
+        &DoorTaskHandle    
+  );
+
   Serial.println("Doors Close Command");
 }
 

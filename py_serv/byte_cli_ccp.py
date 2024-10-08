@@ -128,7 +128,7 @@ def remote_cli():
                 # Behaviour note:
                 # If attempting to quit in CLI mode, the program requires the ESP32 to be connected to safely disconnect, if it fails to do so,
                 # the program will err and hang
-                send_esp_msg(bladeRunnerCommands["STOP"])
+                send_esp_msg("FF")
                 shutdown_esp_socket()
                 HUMAN_INITIATED_EXIT = True
                 sys.exit()
