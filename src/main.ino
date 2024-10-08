@@ -17,6 +17,8 @@
 #define R_DOOR_SENSE_PIN 35
 #define L_DOOR_SENSE_PIN 34
 
+#define TRIG_PIN 21 // SDA on the schematics
+#define ECHO_PIN 22 // SCL on the schematics
 #define PIN_NEO_PIXEL 4
 
 // Status LEDs
@@ -354,6 +356,26 @@ void doorControl(void *parameter)
   vTaskDelete(NULL);
 }
 
+void setupUltrasonic(){
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+}
+
+void frontCollisionDetection(){
+  // For currently 1 ultrasonic
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long rawPulse = pulseIn(ECHO_PIN, HIGH);
+  // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
+  long distanceMeasured = rawPulse / 29 / 2;
+  Serial.printf("Distance in cm measured: %d", distanceMeasured);
+  // Will likely need to make a flag for once we are in a station as detected by the IR sensor
+}
 // LED Flashes //
 
 void wifiFlashLED(void * parameter){
@@ -537,6 +559,8 @@ void setup() {
   Serial.begin(115200);
   setupLEDS();
   setupDoorServos();
+  setupUltrasonic();
+  
   setupWifi();
 
   while(!WiFi.isConnected()){} // Blocking wait for WiFi before attempting CCP connection
@@ -546,6 +570,9 @@ void setup() {
 void loop() {
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
+      // Before we do anytihng, check we aren't going to crash into something
+      frontCollisionDetection();
+      
       // Check Health Status
       checkNetworkStatus();
 
