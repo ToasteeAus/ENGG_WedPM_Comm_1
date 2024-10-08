@@ -19,6 +19,9 @@
 
 #define TRIG_PIN 21 // SDA on the schematics
 #define ECHO_PIN 22 // SCL on the schematics
+
+#define IR_DOOR_ALIGN_PIN 18
+
 #define PIN_NEO_PIXEL 4
 
 // Status LEDs
@@ -43,10 +46,15 @@ int ccpReconnecting = 0;
 const char* ccpIP = "192.168.181.177";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
-// Station and Motor Speeds
+// Motor Speeds
 int fast_speed = 255;
 int slow_speed = 150;
-int atStation = 0;
+
+// Status Checks
+int checkForStation = 0;
+
+// IR Detection Threshold
+const int IR_THRESHOLD = 3000;
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -376,6 +384,24 @@ void frontCollisionDetection(){
   Serial.printf("Distance in cm measured: %d", distanceMeasured);
   // Will likely need to make a flag for once we are in a station as detected by the IR sensor
 }
+
+void checkDoorAlignment(){
+
+  if (checkForStation == 1){
+    int currIRVal = analogRead(IR_DOOR_ALIGN_PIN);
+
+    if (currIRVal < IR_THRESHOLD){
+      Serial.println("We are now aligned to a station");
+      checkForStation = 0;
+      // Insert Code to alert back we are stopped at a station
+      
+    } else {
+      Serial.println("We aren't at a station");
+    }
+  }
+
+}
+
 // LED Flashes //
 
 void wifiFlashLED(void * parameter){
@@ -414,6 +440,7 @@ void forwardSlow(){
 
   setMotorDirection(0,1);
   runMotor(slow_speed);
+  checkForStation = 1;
   Serial.println("Forward Slow Command");
 }
 
@@ -430,6 +457,7 @@ void reverseSlow(){
 
   setMotorDirection(0,0);
   runMotor(slow_speed);
+  checkForStation = 1;
   Serial.println("Reverse Slow Command");
 }
 
@@ -558,6 +586,7 @@ void decipherCCPCommand(){
 void setup() {
   Serial.begin(115200);
   setupLEDS();
+  pinMode(IR_DOOR_ALIGN_PIN, INPUT_PULLUP);
   setupDoorServos();
   setupUltrasonic();
   
@@ -578,6 +607,10 @@ void loop() {
 
       // Execute Commands Received
       decipherCCPCommand();
+
+      // Check we aren't now somehow at a station
+      // This could be changed to an interrupt event
+      checkDoorAlignment();
     }
   }
 }
