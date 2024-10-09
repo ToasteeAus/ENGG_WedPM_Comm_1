@@ -451,7 +451,7 @@ void rearCollisionDetection(){
 }
 
 void frontCollisionDetection(){
-  if (atStation == 0){
+  if (atStation == 0){ // If we re-adjust the ultrasonic cones then we should be able to safely remove this check
     frontUltraSonic.setMode(RCWL_1X05::triggered);
     frontUltraSonic.trigger();
 
@@ -460,13 +460,14 @@ void frontCollisionDetection(){
     int rawUltraSonicData = frontUltraSonic.read();
     int finalTime = millis();
 
-    if (finalTime - checkTime <= 40){
-      if (rawUltraSonicData <= 250){
+    if (finalTime - checkTime <= 40){ // Logic explanation, if the detection range is outside of 40ms from when we triggered the ultrasonic, we treat it as tho it timed out
+      if (rawUltraSonicData <= 250){ // Currently using a 250mm distance as its the lowest amount it should *safely* discern but this can be revised
+        // TODO: Implement check for time-gap between detections to ensure recency of detections
+        // If the gap between the most recent and the last has surpased 500ms, we clear the last group of detections and consider it 1 again
         detectCount++;
       } 
     }
     
-    // TODO: Implement check for time-gap between detections to ensure recency of detections
     if (checkForStation == 1){
       if (detectCount == 9){
         sendAlertToCCP(0xAB);
@@ -481,9 +482,7 @@ void frontCollisionDetection(){
         detectCount = 0;
       }
     }
-    
   }
-
 }
 
 void checkDoorAlignment(){
