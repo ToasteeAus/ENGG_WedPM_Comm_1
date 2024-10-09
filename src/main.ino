@@ -1,5 +1,7 @@
 #include <WiFi.h>
 #include <ESP32Servo.h>
+#include <Wire.h>
+#include <RCWL_1X05.h>
 #include <Adafruit_NeoPixel.h>
 
 /*
@@ -17,8 +19,8 @@
 #define R_DOOR_SENSE_PIN 35
 #define L_DOOR_SENSE_PIN 34
 
-#define TRIG_PIN 21 // SDA on the schematics
-#define ECHO_PIN 22 // SCL on the schematics
+#define TRIG_PIN 2 // Rear facing Ultrasonic
+#define ECHO_PIN 5 // Rear facing Ultrasonic
 
 #define IR_DOOR_ALIGN_PIN 18
 
@@ -28,22 +30,22 @@
 #define NUM_PIXELS 4    // The number of LEDs in sequence
 
 // WiFi credentials
-const char* ssid     = "AndroidAFB94"; // Replace with LAN name and pass
-const char* password = "Test1234";
+const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
+const char* password = "";
 
 // WiFi/Client status ints
 int wifiReconnecting = 0;
 int ccpReconnecting = 0;
 
 // // Static IP configuration
-// IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
-// IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
-// IPAddress subnet(255, 255, 255, 0);   // Subnet mask
-// IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
-// IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
+IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
+IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
+IPAddress subnet(255, 255, 255, 0);   // Subnet mask
+IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
+IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "192.168.181.177";  // Replace with the IP address of your local python server
+const char* ccpIP = "10.20.30.199";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Motor Speeds
@@ -58,6 +60,7 @@ const int IR_THRESHOLD = 3000;
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
+RCWL_1X05 frontUltraSonic;
 WiFiClient client;
 Servo leftdoor;
 Servo rightdoor;
@@ -365,11 +368,14 @@ void doorControl(void *parameter)
 }
 
 void setupUltrasonic(){
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  Wire.begin();
+  frontUltraSonic.begin();
+  frontUltraSonic.setTimeout(30); // 30ms time out for testing, may need to be increased
+  //pinMode(TRIG_PIN, OUTPUT);
+  //pinMode(ECHO_PIN, INPUT);
 }
 
-void frontCollisionDetection(){
+void rearCollisionDetection(){
   // For currently 1 ultrasonic
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
@@ -383,6 +389,21 @@ void frontCollisionDetection(){
   long distanceMeasured = rawPulse / 29 / 2;
   Serial.printf("Distance in cm measured: %d", distanceMeasured);
   // Will likely need to make a flag for once we are in a station as detected by the IR sensor
+}
+
+void frontCollisionDetection(){
+  Serial.print("Triggered mode measurement (non blocking) = ");
+  frontUltraSonic.setMode(RCWL_1X05::triggered);
+  frontUltraSonic.trigger();
+  delay(100); // may want to re-assess the delay time
+  int rawUltraSonicData = frontUltraSonic.read();
+
+  if (rawUltraSonicData <= 350){
+    Serial.println("No Item within Detection Range");
+  } else {
+    Serial.println("Item present within range!");
+  }
+
 }
 
 void checkDoorAlignment(){
@@ -600,6 +621,7 @@ void loop() {
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
       // Before we do anytihng, check we aren't going to crash into something
+      // May add check that we aren't in station searching mode
       frontCollisionDetection();
       
       // Check Health Status
