@@ -272,6 +272,9 @@ def parse_esp_response():
             elif (action == "ff"):
                 # Now we have an ALERT from the ESP
                 logging.debug(f"Received Alert from BR: {cmd}")
+                if (cmd == "AA"):
+                    logging.debug("BladeRunner aligned to station")
+                    # Update status
                 
             else:
                 logging.warning(f"Received non-valid action back from BR: {action}")

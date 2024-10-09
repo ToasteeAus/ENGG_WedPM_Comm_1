@@ -50,13 +50,14 @@ const uint16_t ccpPort = 3028;
 
 // Motor Speeds
 int fast_speed = 255;
-int slow_speed = 150;
+int slow_speed = 50;
 
 // Status Checks
 int checkForStation = 0;
+int atStation = 0;
 
-// IR Detection Threshold
-const int IR_THRESHOLD = 3000;
+// Collision Detection
+int detectCount = 0;
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -310,17 +311,23 @@ void setLEDStatus(int state){
   NeoPixel.show();
 }
 
+void setupMotorPins(){
+  pinMode(DIS_PIN, OUTPUT);
+  pinMode(DIR_PIN, OUTPUT);
+  pinMode(PWM_PIN, OUTPUT);
+}
+
 void setMotorDirection(int disable, int direction){
   if(disable == 1){
     digitalWrite(DIS_PIN, HIGH);
-  } else {
+  } else if (disable == 0) {
     digitalWrite(DIS_PIN, LOW);
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, LOW); // SHOULD BE HIGH
-  } else {
-    digitalWrite(DIR_PIN, HIGH); // SHOULD BE LOW
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH
+  } else if (direction == 0){
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW
   }
 
   // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
@@ -370,7 +377,7 @@ void doorControl(void *parameter)
 void setupUltrasonic(){
   Wire.begin();
   frontUltraSonic.begin();
-  frontUltraSonic.setTimeout(30); // 30ms time out for testing, may need to be increased
+  frontUltraSonic.setTimeout(40); // 30ms time out for testing, may need to be increased
   //pinMode(TRIG_PIN, OUTPUT);
   //pinMode(ECHO_PIN, INPUT);
 }
@@ -392,30 +399,52 @@ void rearCollisionDetection(){
 }
 
 void frontCollisionDetection(){
-  Serial.print("Triggered mode measurement (non blocking) = ");
-  frontUltraSonic.setMode(RCWL_1X05::triggered);
-  frontUltraSonic.trigger();
-  delay(100); // may want to re-assess the delay time
-  int rawUltraSonicData = frontUltraSonic.read();
+  if (atStation == 0){
+    frontUltraSonic.setMode(RCWL_1X05::triggered);
+    frontUltraSonic.trigger();
 
-  if (rawUltraSonicData <= 350){
-    Serial.println("No Item within Detection Range");
-  } else {
-    Serial.println("Item present within range!");
+    delay(100); // may want to re-assess the delay time
+    int checkTime = millis();
+    int rawUltraSonicData = frontUltraSonic.read();
+    int finalTime = millis();
+
+    if (finalTime - checkTime <= 40){
+      if (rawUltraSonicData <= 250){
+        detectCount++;
+      } 
+    }
+    
+    if (checkForStation == 1){
+      if (detectCount == 9){
+        sendAlertToCCP(0xAB);
+        stop();
+        detectCount = 0;
+    }
+    } else {
+      if (detectCount == 3){
+        sendAlertToCCP(0xAB);
+        stop();
+        detectCount = 0;
+      }
+    }
+    
   }
 
 }
 
 void checkDoorAlignment(){
-
   if (checkForStation == 1){
-    int currIRVal = analogRead(IR_DOOR_ALIGN_PIN);
+    int currIRVal = digitalRead(IR_DOOR_ALIGN_PIN);
+    Serial.println(currIRVal);
 
-    if (currIRVal < IR_THRESHOLD){
+    if (currIRVal == LOW){
+      delay(150);
+      stop();
       Serial.println("We are now aligned to a station");
+      sendAlertToCCP(0xAA); // AA for Station alignment
       checkForStation = 0;
       // Insert Code to alert back we are stopped at a station
-      
+      atStation = 1;
     } else {
       Serial.println("We aren't at a station");
     }
@@ -453,13 +482,14 @@ void stop(){
 
   setMotorDirection(1,1); 
   runMotor(0);
+  checkForStation = 0;
   Serial.println("Stop Command");
 }
 
 void forwardSlow(){
   setLEDStatus(1);
+  setMotorDirection(0, 1);
 
-  setMotorDirection(0,1);
   runMotor(slow_speed);
   checkForStation = 1;
   Serial.println("Forward Slow Command");
@@ -470,6 +500,8 @@ void forwardFast(){
 
   setMotorDirection(0,1);
   runMotor(fast_speed);
+  checkForStation = 0;
+  atStation = 0;
   Serial.println("Forward Fast Command");
 }
 
@@ -487,11 +519,13 @@ void reverseFast(){
 
   setMotorDirection(0,0);
   runMotor(fast_speed);
+  checkForStation = 0;
   Serial.println("Reverse Fast Command");
 }
 
 void doorsOpen(){
   int direction = 1;
+  checkForStation = 0;
   // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
   xTaskCreate(
         doorControl,   
@@ -508,6 +542,7 @@ void doorsOpen(){
 
 void doorsClose(){
   int direction = -1;
+  checkForStation = 0;
   xTaskCreate(
         doorControl,   
         "DoorControl",    
@@ -606,6 +641,9 @@ void decipherCCPCommand(){
 
 void setup() {
   Serial.begin(115200);
+  setupMotorPins();
+  setMotorDirection(1, 1); // Test reseting the motor direction
+  
   setupLEDS();
   pinMode(IR_DOOR_ALIGN_PIN, INPUT_PULLUP);
   setupDoorServos();

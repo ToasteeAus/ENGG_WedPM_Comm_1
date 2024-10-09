@@ -220,6 +220,12 @@ def esp_parser(hex_data):
         elif (action == "ff"):
             # Now we have an ALERT from the ESP
             logging.debug(f"Received Alert from ESP: {cmd}")
+            if (cmd == "AA"):
+                logging.debug("BladeRunner aligned to station")
+            elif (cmd == "AB"):
+                logging.warning("Object in BladeRunner Path!")
+            elif (cmd == "00"):
+                logging.debug("No Object Detected by BladeRunner")
             
         else:
             logging.warning(f"Received non-valid action back from ESP: {action}")
