@@ -286,16 +286,6 @@ void setLEDStatus(int state){
       green = 40;
       blue = 0;
       break;
-    case 96: // DOOR-ALIGN, Detected
-      red = 255;
-      green = 0;
-      blue = 255;
-      break;
-    case 97: // COLLISION, Detected
-      red = 0;
-      green = 255;
-      blue = 255;
-      break;
     case 98: // DISCONNECTED, Not connected to Wifi
       red = 255;
       green = 40;
@@ -471,7 +461,6 @@ void frontCollisionDetection(){
       if (detectCount == 9){
         sendAlertToCCP(0xAB);
         stop();
-        setLEDStatus(97);
         detectCount = 0;
       }
     } else {
@@ -496,7 +485,6 @@ void checkDoorAlignment(){
       stop();
       Serial.println("We are now aligned to a station");
       sendAlertToCCP(0xAA); // AA for Station alignment
-      setLEDStatus(96);
       checkForStation = 0;
       // Insert Code to alert back we are stopped at a station
       atStation = 1;
