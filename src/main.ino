@@ -435,7 +435,6 @@ void setupUltrasonic(){
 }
 
 void rearCollisionDetection(){
-  // For currently 1 ultrasonic
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
 
@@ -447,7 +446,6 @@ void rearCollisionDetection(){
   // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
   long distanceMeasured = rawPulse / 29 / 2;
   Serial.printf("Distance in cm measured: %d", distanceMeasured);
-  // Will likely need to make a flag for once we are in a station as detected by the IR sensor
 }
 
 void frontCollisionDetection(){
@@ -529,7 +527,7 @@ void doorFlashLED(void * parameter){
   }
 }
 
-void DisconnectFlashLED(void * parameter){
+void DisconnectFlashLED(){
   for(;;){
     LEDFlash(0);
     delay(500);
@@ -630,16 +628,9 @@ void disconnect(){
   setMotorDirection(1,1); 
   runMotor(0);
   disconnected = true;
+  WiFi.disconnect(true, true); 
   Serial.print("Awaiting Removal from Track");
-  xTaskCreatePinnedToCore(
-                  DisconnectFlashLED,   /* Task function. */
-                  "DisconnectFlashLED",     /* name of task. */
-                  2048,       /* Stack size of task */
-                  NULL,        /* parameter of the task */
-                  1,           /* priority of the task */
-                  &FlashLEDTask,      /* Task handle to keep track of created task */
-                  0);          /* pin task to core 0 */ 
-  
+  DisconnectFlashLED();
 }
 
 // CCP Listening //
