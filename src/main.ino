@@ -9,24 +9,30 @@
   Remove all Serial statements when we produce the production variant of this code with all systems operational
 */
 
-// Pin definitions
+// Motor Pin Definitions
 #define DIS_PIN 15
 #define DIR_PIN 13
 #define PWM_PIN 12
 
+// Door Pin Definitions
 #define R_DOOR_PIN 23
 #define L_DOOR_PIN 27
 #define R_DOOR_SENSE_PIN 35
 #define L_DOOR_SENSE_PIN 34
-
-#define TRIG_PIN 2 // Rear facing Ultrasonic
-#define ECHO_PIN 5 // Rear facing Ultrasonic
-
 #define IR_DOOR_ALIGN_PIN 18
 
-#define PIN_NEO_PIXEL 4
+// Power Management System Pin Definitions
+#define B_SENSE 33 // BSENSE - 0 -> 3.3v proportional to 0 - 12.6v of the battery
+#define FIVE_RAW 32 // 5VRaw - 0 -> 3.3v to 0 - 5v -> Will drop when battery drops (Battery Trigger)
+// VP, VC -> Not necessary but nice to have
+// BMS, When BSEnse drops below 9.6v (proportional) -> stop, disconnect, to MCP, then set to DISCONNECT state
+
+// Rear facing ultrasonic
+#define TRIG_PIN 2 // Rear facing Ultrasonic
+#define ECHO_PIN 5 // Rear facing Ultrasonic=
 
 // Status LEDs
+#define PIN_NEO_PIXEL 4
 #define NUM_PIXELS 4    // The number of LEDs in sequence
 
 // WiFi credentials
@@ -45,7 +51,7 @@ IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
 IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "10.20.30.199";  // Replace with the IP address of your local python server
+const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Motor Speeds
@@ -207,10 +213,12 @@ void sendAlertToCCP(uint8_t alertCode){
 
 void checkNetworkStatus(){
   if(!WiFi.isConnected()){
+    stop();
     setupWifi();
   }
 
   if(!client.connected()){
+    stop();
     setupCCP();
   }
 }
@@ -469,14 +477,19 @@ void frontCollisionDetection(){
     if (checkForStation == 1){
       if (detectCount == 9){
         sendAlertToCCP(0xAB);
-        stop();
         setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
         detectCount = 0;
       }
     } else {
       if (detectCount == 3){
         sendAlertToCCP(0xAB);
-        stop();
+        setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
         detectCount = 0;
       }
     }
@@ -504,6 +517,10 @@ void checkDoorAlignment(){
 
 }
 
+void setupBatteryPins(){
+  pinMode(B_SENSE, INPUT);
+  pinMode(FIVE_RAW, INPUT);
+}
 // LED Flashes //
 
 void wifiFlashLED(void * parameter){
@@ -627,10 +644,40 @@ void setSlowSpeed(int newSpeed){
 void disconnect(){
   setMotorDirection(1,1); 
   runMotor(0);
+
   disconnected = true;
+  sendAlertToCCP(0xFF);
+
   WiFi.disconnect(true, true); 
   Serial.print("Awaiting Removal from Track");
   DisconnectFlashLED();
+}
+
+void batteryStatus(){
+  // BSENSE - 0 -> 3.3v proportional to 0 - 12.6v of the battery
+  // 5VRaw - 0 -> 3.3v to 0 - 5v -> Will drop when battery drops (Battery Trigger)
+  // VP, VC -> Not necessary but nice to have
+  // BMS, When BSEnse drops below 9.0v (proportional) -> stop, disconnect, to MCP, then set to DISCONNECT state
+
+  int currBatteryVoltage = analogRead(B_SENSE);
+  double batteryProportionalVoltage = (12.5 / 4096) * currBatteryVoltage;
+
+  int currFiveRailVoltage = analogRead(FIVE_RAW);
+  double fiveRailProportionalVoltage = (5.0 / 4096) * currFiveRailVoltage;
+
+  if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 9.0){
+    sendAlertToCCP(0xFE);
+    setMotorDirection(1,1); 
+    runMotor(0);
+    DisconnectFlashLED();
+  }
+
+  Serial.print("\nBMS - BATTERY VOLTAGE: ");
+  Serial.print(batteryProportionalVoltage);
+
+  Serial.print("\nBMS - FIVE VOLT RAIL: ");
+  Serial.print(fiveRailProportionalVoltage);
+
 }
 
 // CCP Listening //
@@ -693,6 +740,7 @@ void decipherCCPCommand(){
 
 void setup() {
   Serial.begin(115200);
+  setupBatteryPins();
   setupMotorPins();
   setMotorDirection(1, 1); // Test reseting the motor direction
   
@@ -708,6 +756,7 @@ void setup() {
 }
 
 void loop() {
+  batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
       // Before we do anytihng, check we aren't going to crash into something
@@ -723,6 +772,10 @@ void loop() {
       // Check we aren't now somehow at a station
       // This could be changed to an interrupt event
       checkDoorAlignment();
+    } else {
+      stop();
     }
+  } else {
+    stop();
   }
 }
