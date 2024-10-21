@@ -213,24 +213,29 @@ def esp_parser(hex_data):
             try:
                 checkCmd = bladeRunnerCommandsKey_list[bladeRunnerCommandsVal_list.index(cmd)]
                 if (checkCmd):
-                    logging.debug(f"Received ACK from ESP: {checkCmd}")
+                    logging.debug(f"Received ACK from BR: {checkCmd}")
             except:
-                logging.debug(f"Received ACK from ESP for unknown command: {cmd}")
+                logging.debug(f"Received ACK from BR for unknown command: {cmd}")
                 
         elif (action == "ff"):
-            # Now we have an ALERT from the ESP
-            logging.debug(f"Received Alert from ESP: {cmd}")
-            if (cmd == "AA"):
+            # Now we have an ALERT from the BR
+            logging.debug(f"Received Alert from BR: {cmd}")
+            if (cmd == "aa"):
                 logging.debug("BladeRunner aligned to station")
-            elif (cmd == "AB"):
-                logging.warning("Object in BladeRunner Path!")
-            elif (cmd == "00"):
-                logging.debug("No Object Detected by BladeRunner")
+                
+            elif (cmd == "ab"):
+                logging.critical("BladeRunner has had collision!")
+                
+            elif (cmd == "fe"):
+                logging.critical("BladeRunner has lost power!")
+                
+            elif (cmd == "ff"):
+                logging.critical("BladeRunner is now Offline")
             
         else:
-            logging.warning(f"Received non-valid action back from ESP: {action}")
+            logging.warning(f"Received non-valid action back from BR: {action}")
     else:
-        logging.warning(f"Received malformed reply back from ESP: {hex_data}")
+        logging.warning(f"Received malformed reply back from BR: {hex_data}")
 
 def esp_listener_thread():
     while not HUMAN_INITIATED_EXIT:

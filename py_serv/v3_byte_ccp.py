@@ -319,8 +319,9 @@ def parse_esp_response():
                     print("BladeRunner has had a collision!")
                     CURR_BR_STATUS = BR_STATUS[0]
                     send_mcp_msg(create_mcp_stat_msg())
+                    
                 elif (cmd == "fe"):
-                    logging.critical("BladeRUnner has lost power!")
+                    logging.critical("BladeRunner has lost power!")
                     print("BladeRunner has lost power!")
                     CURR_BR_STATUS = BR_STATUS[5]
                     send_mcp_msg(create_mcp_stat_msg())
@@ -331,6 +332,10 @@ def parse_esp_response():
                     CURR_BR_STATUS = BR_STATUS[6]
                     send_mcp_msg(create_mcp_stat_msg())
                 
+                elif (cmd == "ba"):
+                    logging.debug("BladeRunner is reporting Battery Voltage")
+                    print("BladeRunner is reporting Battery Voltage")
+                    
             else:
                 logging.warning(f"Received non-valid action back from BR: {action}")
                 print(f"Received non-valid action back from BR: {action}")

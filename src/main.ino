@@ -379,6 +379,7 @@ void doorControl(void *parameter)
     while(leftShut == 0 or rightShut == 0){
       if (leftShut == 0){
         if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
+          delay(50); // debounce
           leftShut = 1;
           leftdoor.write(90);
         }
@@ -386,6 +387,7 @@ void doorControl(void *parameter)
 
       if(rightShut == 0){
         if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
+          delay(50); // debounce
           rightShut = 1;
           rightdoor.write(90);
         }
@@ -414,6 +416,7 @@ void doorControl(void *parameter)
     while(leftShut == 0 or rightShut == 0){
       if (leftShut == 0){
         if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
+          delay(50); // debounce
           leftShut = 1;
           leftdoor.write(90);
         }
@@ -421,6 +424,7 @@ void doorControl(void *parameter)
 
       if(rightShut == 0){
         if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
+          delay(50); // debounce
           rightShut = 1;
           rightdoor.write(90);
         }
