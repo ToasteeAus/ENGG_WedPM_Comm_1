@@ -343,9 +343,9 @@ void setMotorDirection(int disable, int direction){
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW ON PRIOR to V2 BR
   } else if (direction == 0){
-    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH ON PRIOR TO V2 BR
   }
 
   // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
@@ -359,15 +359,7 @@ void doorControl(void *parameter)
 {
   int direction = *(int *)parameter;
 
-  if (direction == 1)
-  { // door open; moves in clockwise direction
-    leftdoor.write(45);
-    rightdoor.write(45);
-
-    int leftShut = 0;
-    int rightShut = 0;
-
-    xTaskCreate(
+  xTaskCreate(
         doorFlashLED,   
         "DoorFlashLED",    
         2048,               
@@ -376,64 +368,87 @@ void doorControl(void *parameter)
         &FlashLEDTask    
     );
 
-    while(leftShut == 0 or rightShut == 0){
-      if (leftShut == 0){
-        if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-          delay(50); // debounce
-          leftShut = 1;
-          leftdoor.write(90);
-        }
-      }
+  vTaskDelay(3000);
 
-      if(rightShut == 0){
-        if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-          delay(50); // debounce
-          rightShut = 1;
-          rightdoor.write(90);
-        }
-      }
-    }
+  // if (direction == 1)
+  // { // door open; moves in clockwise direction
+  //   leftdoor.write(45);
+  //   rightdoor.write(45);
 
-    vTaskDelete(FlashLEDTask);
-    setLEDStatus(5);
-  }
-  else if (direction == -1)
-  { // door close; moves in anticlockwise direction
-    leftdoor.write(135);
-    rightdoor.write(135);
-    int leftShut = 0;
-    int rightShut = 0;
+  //   int leftShut = 0;
+  //   int rightShut = 0;
 
-    xTaskCreate(
-        doorFlashLED,   
-        "DoorFlashLED",    
-        2048,               
-        NULL,           
-        1,                  
-        &FlashLEDTask    
-    );
+  //   xTaskCreate(
+  //       doorFlashLED,   
+  //       "DoorFlashLED",    
+  //       2048,               
+  //       NULL,           
+  //       1,                  
+  //       &FlashLEDTask    
+  //   );
 
-    while(leftShut == 0 or rightShut == 0){
-      if (leftShut == 0){
-        if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-          delay(50); // debounce
-          leftShut = 1;
-          leftdoor.write(90);
-        }
-      }
+  //   while(leftShut == 0 or rightShut == 0){
+  //     if (leftShut == 0){
+  //       if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
+  //         delay(50); // debounce
+  //         leftShut = 1;
+  //         leftdoor.write(90);
+  //       }
+  //     }
 
-      if(rightShut == 0){
-        if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-          delay(50); // debounce
-          rightShut = 1;
-          rightdoor.write(90);
-        }
-      }
-    }
+  //     if(rightShut == 0){
+  //       if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
+  //         delay(50); // debounce
+  //         rightShut = 1;
+  //         rightdoor.write(90);
+  //       }
+  //     }
+  //   }
 
-    vTaskDelete(FlashLEDTask);
-    setLEDStatus(5);
-  }
+  //   vTaskDelete(FlashLEDTask);
+  //   setLEDStatus(5);
+  // }
+  // else if (direction == -1)
+  // { // door close; moves in anticlockwise direction
+  //   leftdoor.write(135);
+  //   rightdoor.write(135);
+  //   int leftShut = 0;
+  //   int rightShut = 0;
+
+  //   xTaskCreate(
+  //       doorFlashLED,   
+  //       "DoorFlashLED",    
+  //       2048,               
+  //       NULL,           
+  //       1,                  
+  //       &FlashLEDTask    
+  //   );
+
+  //   // while(leftShut == 0 or rightShut == 0){
+  //   //   if (leftShut == 0){
+  //   //     if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
+  //   //       delay(50); // debounce
+  //   //       leftShut = 1;
+  //   //       leftdoor.write(90);
+  //   //     }
+  //   //   }
+
+  //   //   if(rightShut == 0){
+  //   //     if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
+  //   //       delay(50); // debounce
+  //   //       rightShut = 1;
+  //   //       rightdoor.write(90);
+  //   //     }
+  //   //   }
+  //   // }
+
+
+  //   vTaskDelete(FlashLEDTask);
+  //   setLEDStatus(5);
+  // }
+
+  vTaskDelete(FlashLEDTask);
+  setLEDStatus(5);
   
   vTaskDelete(NULL);
 }
