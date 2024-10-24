@@ -14,6 +14,7 @@ This guide should help get your own local VSCode Workspace setup with the requir
 7. Once done, reload your VSCode window
 8. For some devices, they may natively support the chipset used to communicate between an ESP32 and your device, in case the ESP32 is not recognised, download the following driver with the correct version for your system, [install](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=downloads)
 9. Inside VSCode, using the following command (MAC: cmd+shift+P, WIN:ctrl+shift+P) to open a prompt, enter and select "Python: Select Interpreter" and select 3.12.4 as you've installed
+10. Ensure you have the latest commit from git by selecting from the left panel "Source Control" then hit the ellipsis dropdown, and select "Fetch".
 
 ## Using Python
 
