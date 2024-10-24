@@ -41,8 +41,8 @@ ESP_SENT_LOCK = threading.Lock()
 ESP_RECV_LOCK = threading.Lock()
 
 # MCP UDP Server
-MCP_PORT = 3001
-MCP_SERVER = ("10.20.30.193", MCP_PORT)
+MCP_PORT = 2000
+MCP_SERVER = ("10.20.30.1", MCP_PORT)
 mcp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 MCP_CONNECTED = False
 
@@ -186,7 +186,7 @@ def send_esp_msg(data_to_send):
         # Behaviour should catch any case where for whatever reason the data cannot be transmitted n will attempt to startup the socket
 
 def parse_esp_response():
-    global ESP_RECV_Q, ESP_SENT_Q, bladeRunnerCommands, BR_DOOR_OPEN, BR_LAST_CMD, CURR_BR_STATUS
+    global ESP_RECV_Q, ESP_SENT_Q, bladeRunnerCommands, BR_DOOR_OPEN, BR_LAST_CMD, CURR_BR_STATUS, BR_STATUS
     
     if not ESP_RECV_Q.empty():
         ESP_RECV_LOCK.acquire()
