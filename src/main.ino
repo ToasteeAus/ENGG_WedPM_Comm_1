@@ -49,6 +49,7 @@ const char* password = "";
 // WiFi/Client status ints
 int wifiReconnecting = 0;
 int ccpReconnecting = 0;
+bool disconnected = false;
 
 // // Static IP configuration
 IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
@@ -88,31 +89,11 @@ Servo rightdoor;
 // 0x08 - SetFastSpeed ex 0x08 0xFF -> Fast Speed set to 255
 
 // Custom Byte Code Variables //
-
 int newSpeed;
-bool disconnected = false;
 
 // Tasks //
-
 TaskHandle_t FlashLEDTask;
 TaskHandle_t DoorTaskHandle;
-// Helpers //
-
-// This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
-void delayButNotDelay(int delayTimeInMs){
-  // Input "delay" time in ms
-  uint64_t timer = esp_timer_get_time();
-  uint64_t pretime = esp_timer_get_time();
-  uint64_t t = 0;
-
-  while (t != delayTimeInMs){
-    if(timer - pretime >= 1000) { // 1ms
-      t++;
-      pretime = timer;
-    }
-    timer = esp_timer_get_time();
-  }
-}
 
 // WiFi //
 
@@ -424,9 +405,9 @@ void rearCollisionDetection(){
     delayMicroseconds(10);
     digitalWrite(TRIG_PIN, LOW);
 
-    long rawPulse = pulseIn(ECHO_PIN, HIGH);
+    long rawPulse = pulseIn(ECHO_PIN, HIGH); // TODO: Add timeout!
     // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
-    long dist = rawPulse / 29 / 2;
+    long dist = rawPulse / 29 / 2; // TODO: our / 29 may need to become * 0.034
     Serial.printf("Distance measured in cm: %d", dist); // if pulse is less than or equal to 320
     if (dist <= 41 && dist >= 2){
       detectCount++;
@@ -762,7 +743,6 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(digitalRead(L_DOOR_SENSE_PIN));
   batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
