@@ -124,6 +124,9 @@ def remote_cli():
         
         human_control = raw[0]
         match (human_control):
+            case "sound":
+                send_esp_msg("EE")
+                
             case "quit" | "exit" | "q":
                 # Behaviour note:
                 # If attempting to quit in CLI mode, the program requires the ESP32 to be connected to safely disconnect, if it fails to do so,

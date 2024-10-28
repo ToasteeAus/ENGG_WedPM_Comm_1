@@ -1,44 +1,67 @@
 #include <ESP32Servo.h>
+#include <Wire.h>
+#include <RCWL_1X05.h>
 
+// Door Pin Definitions
 #define R_DOOR_PIN 23
 #define L_DOOR_PIN 27
-#define R_DOOR_SENSE_PIN 35
-#define L_DOOR_SENSE_PIN 34
+
+// Class Object Constructors
 
 Servo leftdoor;
 Servo rightdoor;
 
-void doorControl(int direction)
+// Hardware Functions //
+
+void setupDoorServos(){
+  leftdoor.attach(L_DOOR_PIN);
+  rightdoor.attach(R_DOOR_PIN);
+}
+
+void doorControl(int dir)
 {
+  int direction = dir;
+
   if (direction == 1)
   { // door open; moves in clockwise direction
     leftdoor.write(45);
-    rightdoor.write(45);
-    delay(5000); // rotates for 5 seconds
+    delay(950);
     leftdoor.write(90);
-    rightdoor.write(90); // stops
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
-    rightdoor.write(135);
-    delay(5000); // rotates for 5 seconds
-    leftdoor.write(90); // stops
-    rightdoor.write(90);
+    delay(950);
+    leftdoor.write(90);
   }
 }
 
-void setup(){
-  pinMode(L_DOOR_SENSE_PIN, INPUT);
-  pinMode(R_DOOR_SENSE_PIN, INPUT);
-  leftdoor.attach(L_DOOR_PIN);
-  rightdoor.attach(R_DOOR_PIN);
-
-  doorControl(1);
-  delay(2000);
-  doorControl(-1);
+void doorsOpen(){
+  int direction = 1;
+  // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
+  doorControl(direction);
+  Serial.println("Doors Open Command");
 }
 
-void loop(){
+void doorsClose(){
+  int direction = -1;
 
+  doorControl(direction);
+
+  Serial.println("Doors Close Command");
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  setupDoorServos();
+
+  delay(2000);
+  doorsOpen();
+  delay(2000);
+  doorsClose();
+}
+
+void loop() {
+  
 }

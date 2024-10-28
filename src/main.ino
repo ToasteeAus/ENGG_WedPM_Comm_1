@@ -3,6 +3,8 @@
 #include <Wire.h>
 #include <RCWL_1X05.h>
 #include <Adafruit_NeoPixel.h>
+#include "XT_DAC_Audio.h"
+#include "SoundData.h"
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
@@ -35,6 +37,11 @@
 #define PIN_NEO_PIXEL 4
 #define NUM_PIXELS 4    // The number of LEDs in sequence
 
+// Audio System
+#define AUDIO_PIN 25
+XT_Wav_Class doorsCloser(doorsClosing);
+XT_DAC_Audio_Class DacAudio(AUDIO_PIN, 0);
+
 // WiFi credentials
 const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
 const char* password = "";
@@ -64,6 +71,7 @@ int atStation = 0;
 
 // Collision Detection
 int detectCount = 0;
+int detectorSelected = 1; // 1 for front, -1 for rear
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -88,7 +96,6 @@ bool disconnected = false;
 
 TaskHandle_t FlashLEDTask;
 TaskHandle_t DoorTaskHandle;
-
 // Helpers //
 
 // This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
@@ -355,102 +362,22 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
-void doorControl(void *parameter)
+void doorControl(int dir)
 {
-  int direction = *(int *)parameter;
+  int direction = dir;
 
-  xTaskCreate(
-        doorFlashLED,   
-        "DoorFlashLED",    
-        2048,               
-        NULL,           
-        1,                  
-        &FlashLEDTask    
-    );
-
-  vTaskDelay(3000);
-
-  // if (direction == 1)
-  // { // door open; moves in clockwise direction
-  //   leftdoor.write(45);
-  //   rightdoor.write(45);
-
-  //   int leftShut = 0;
-  //   int rightShut = 0;
-
-  //   xTaskCreate(
-  //       doorFlashLED,   
-  //       "DoorFlashLED",    
-  //       2048,               
-  //       NULL,           
-  //       1,                  
-  //       &FlashLEDTask    
-  //   );
-
-  //   while(leftShut == 0 or rightShut == 0){
-  //     if (leftShut == 0){
-  //       if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-  //         delay(50); // debounce
-  //         leftShut = 1;
-  //         leftdoor.write(90);
-  //       }
-  //     }
-
-  //     if(rightShut == 0){
-  //       if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-  //         delay(50); // debounce
-  //         rightShut = 1;
-  //         rightdoor.write(90);
-  //       }
-  //     }
-  //   }
-
-  //   vTaskDelete(FlashLEDTask);
-  //   setLEDStatus(5);
-  // }
-  // else if (direction == -1)
-  // { // door close; moves in anticlockwise direction
-  //   leftdoor.write(135);
-  //   rightdoor.write(135);
-  //   int leftShut = 0;
-  //   int rightShut = 0;
-
-  //   xTaskCreate(
-  //       doorFlashLED,   
-  //       "DoorFlashLED",    
-  //       2048,               
-  //       NULL,           
-  //       1,                  
-  //       &FlashLEDTask    
-  //   );
-
-  //   // while(leftShut == 0 or rightShut == 0){
-  //   //   if (leftShut == 0){
-  //   //     if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-  //   //       delay(50); // debounce
-  //   //       leftShut = 1;
-  //   //       leftdoor.write(90);
-  //   //     }
-  //   //   }
-
-  //   //   if(rightShut == 0){
-  //   //     if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-  //   //       delay(50); // debounce
-  //   //       rightShut = 1;
-  //   //       rightdoor.write(90);
-  //   //     }
-  //   //   }
-  //   // }
-
-
-  //   vTaskDelete(FlashLEDTask);
-  //   setLEDStatus(5);
-  // }
-
-  vTaskDelete(FlashLEDTask);
-  setLEDStatus(5);
-  
-  vTaskDelete(NULL);
+  if (direction == 1)
+  { // door open; moves in clockwise direction
+    leftdoor.write(45);
+    delay(950);
+    leftdoor.write(90);
+  }
+  else if (direction == -1)
+  { // door close; moves in anticlockwise direction
+    leftdoor.write(135);
+    delay(950);
+    leftdoor.write(90);
+  }
 }
 
 void setupUltrasonic(){
@@ -503,7 +430,7 @@ void frontCollisionDetection(){
         detectCount = 0;
       }
     } else {
-      if (detectCount == 3){
+      if (detectCount == 25){
         sendAlertToCCP(0xAB);
         setLEDStatus(97);
         setMotorDirection(1,1); 
@@ -540,6 +467,7 @@ void setupBatteryPins(){
   pinMode(B_SENSE, INPUT);
   pinMode(FIVE_RAW, INPUT);
 }
+
 // LED Flashes //
 
 void wifiFlashLED(void * parameter){
@@ -582,6 +510,7 @@ void stop(){
 }
 
 void forwardSlow(){
+  detectorSelected = 1;
   setLEDStatus(1);
   setMotorDirection(0, 1);
 
@@ -591,6 +520,7 @@ void forwardSlow(){
 }
 
 void forwardFast(){
+  detectorSelected = 1;
   setLEDStatus(2);
 
   setMotorDirection(0,1);
@@ -601,6 +531,7 @@ void forwardFast(){
 }
 
 void reverseSlow(){
+  detectorSelected = -1;
   setLEDStatus(3);
 
   setMotorDirection(0,0);
@@ -610,6 +541,7 @@ void reverseSlow(){
 }
 
 void reverseFast(){
+  detectorSelected = -1;
   setLEDStatus(4);
 
   setMotorDirection(0,0);
@@ -622,14 +554,7 @@ void doorsOpen(){
   int direction = 1;
   checkForStation = 0;
   // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
-  xTaskCreate(
-        doorControl,   
-        "DoorControl",   
-        2048,               
-        &direction,               
-        1,                  
-        &DoorTaskHandle    
-  );
+  doorControl(direction);
 
   
   Serial.println("Doors Open Command");
@@ -638,14 +563,10 @@ void doorsOpen(){
 void doorsClose(){
   int direction = -1;
   checkForStation = 0;
-  xTaskCreate(
-        doorControl,   
-        "DoorControl",    
-        2048,               
-        &direction,           
-        1,                  
-        &DoorTaskHandle    
-  );
+
+  //playAudio();
+
+  doorControl(direction);
 
   Serial.println("Doors Close Command");
 }
@@ -699,6 +620,15 @@ void batteryStatus(){
 
 }
 
+void playAudio(){
+  DacAudio.FillBuffer();                // Fill the sound buffer with data
+  Serial.println(DacAudio.BufferUsage());
+  Serial.println(doorsCloser.PlayingTime);
+  if(doorsCloser.Playing==false)       // if not playing,
+    DacAudio.Play(&doorsCloser);
+    delay(doorsCloser.PlayingTime);
+}
+
 // CCP Listening //
 
 void decipherCCPCommand(){
@@ -736,6 +666,9 @@ void decipherCCPCommand(){
         while(!client.available()){}
         newSpeed = client.read();
         setFastSpeed(newSpeed);
+        break;
+      case 0xEE:
+        playAudio();
         break;
       case 0xFF:
         disconnect();
@@ -775,12 +708,18 @@ void setup() {
 }
 
 void loop() {
+  
   batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
       // Before we do anytihng, check we aren't going to crash into something
       // May add check that we aren't in station searching mode
-      frontCollisionDetection();
+      if (detectorSelected == 1){
+        frontCollisionDetection();
+      } else if (detectorSelected == -1){
+        //rearCollisionDetection();
+      }
+      
       
       // Check Health Status
       checkNetworkStatus();

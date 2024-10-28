@@ -3,31 +3,44 @@
 #include <Wire.h>
 #include <RCWL_1X05.h>
 #include <Adafruit_NeoPixel.h>
+#include "XT_DAC_Audio.h"
+#include "SoundData.h"
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
   Remove all Serial statements when we produce the production variant of this code with all systems operational
 */
 
-// Pin definitions
+// Motor Pin Definitions
 #define DIS_PIN 15
 #define DIR_PIN 13
 #define PWM_PIN 12
 
+// Door Pin Definitions
 #define R_DOOR_PIN 23
 #define L_DOOR_PIN 27
 #define R_DOOR_SENSE_PIN 35
 #define L_DOOR_SENSE_PIN 34
-
-#define TRIG_PIN 2 // Rear facing Ultrasonic
-#define ECHO_PIN 5 // Rear facing Ultrasonic
-
 #define IR_DOOR_ALIGN_PIN 18
 
-#define PIN_NEO_PIXEL 4
+// Power Management System Pin Definitions
+#define B_SENSE 33 // BSENSE - 0 -> 3.3v proportional to 0 - 12.6v of the battery
+#define FIVE_RAW 32 // 5VRaw - 0 -> 3.3v to 0 - 5v -> Will drop when battery drops (Battery Trigger)
+// VP, VC -> Not necessary but nice to have
+// BMS, When BSEnse drops below 9.6v (proportional) -> stop, disconnect, to MCP, then set to DISCONNECT state
+
+// Rear facing ultrasonic
+#define TRIG_PIN 2 // Rear facing Ultrasonic
+#define ECHO_PIN 5 // Rear facing Ultrasonic=
 
 // Status LEDs
+#define PIN_NEO_PIXEL 4
 #define NUM_PIXELS 4    // The number of LEDs in sequence
+
+// Audio System
+#define AUDIO_PIN 25
+XT_Wav_Class doorsCloser(doorsClosing);
+XT_DAC_Audio_Class DacAudio(AUDIO_PIN, 0);
 
 // WiFi credentials
 const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
@@ -45,7 +58,7 @@ IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
 IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
-const char* ccpIP = "10.20.30.199";  // Replace with the IP address of your local python server
+const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local python server
 const uint16_t ccpPort = 3028;
 
 // Motor Speeds
@@ -58,6 +71,7 @@ int atStation = 0;
 
 // Collision Detection
 int detectCount = 0;
+int detectorSelected = 1; // 1 for front, -1 for rear
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -82,7 +96,6 @@ bool disconnected = false;
 
 TaskHandle_t FlashLEDTask;
 TaskHandle_t DoorTaskHandle;
-
 // Helpers //
 
 // This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
@@ -207,10 +220,12 @@ void sendAlertToCCP(uint8_t alertCode){
 
 void checkNetworkStatus(){
   if(!WiFi.isConnected()){
+    stop();
     setupWifi();
   }
 
   if(!client.connected()){
+    stop();
     setupCCP();
   }
 }
@@ -286,6 +301,16 @@ void setLEDStatus(int state){
       green = 40;
       blue = 0;
       break;
+    case 96: // DOOR-ALIGN, Detected
+      red = 255;
+      green = 0;
+      blue = 255;
+      break;
+    case 97: // COLLISION, Detected
+      red = 0;
+      green = 255;
+      blue = 255;
+      break;
     case 98: // DISCONNECTED, Not connected to Wifi
       red = 255;
       green = 40;
@@ -325,9 +350,9 @@ void setMotorDirection(int disable, int direction){
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW ON PRIOR to V2 BR
   } else if (direction == 0){
-    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH ON PRIOR TO V2 BR
   }
 
   // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
@@ -337,83 +362,37 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
-void doorControl(void *parameter)
+void doorControl(int dir)
 {
-  int direction = *(int *)parameter;
+  int direction = dir; 
+
+  xTaskCreate(
+        doorFlashLED,   
+        "DoorFlashLED",    
+        2048,               
+        NULL,           
+        1,                  
+        &FlashLEDTask    
+    );
 
   if (direction == 1)
   { // door open; moves in clockwise direction
     leftdoor.write(45);
-    rightdoor.write(45);
-
-    int leftShut = 0;
-    int rightShut = 0;
-
-    xTaskCreate(
-        doorFlashLED,   
-        "DoorFlashLED",    
-        2048,               
-        NULL,           
-        1,                  
-        &FlashLEDTask    
-    );
-
-    while(leftShut == 0 or rightShut == 0){
-      if (leftShut == 0){
-        if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-          leftShut = 1;
-          leftdoor.write(90);
-        }
-      }
-
-      if(rightShut == 0){
-        if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-          rightShut = 1;
-          rightdoor.write(90);
-        }
-      }
-    }
+    vTaskDelay(950);
+    leftdoor.write(90);
 
     vTaskDelete(FlashLEDTask);
-    setLEDStatus(5);
+    setLEDStatus(6);
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
-    rightdoor.write(135);
-    int leftShut = 0;
-    int rightShut = 0;
-
-    xTaskCreate(
-        doorFlashLED,   
-        "DoorFlashLED",    
-        2048,               
-        NULL,           
-        1,                  
-        &FlashLEDTask    
-    );
-
-    while(leftShut == 0 or rightShut == 0){
-      if (leftShut == 0){
-        if(digitalRead(L_DOOR_SENSE_PIN) == LOW){
-          leftShut = 1;
-          leftdoor.write(90);
-        }
-      }
-
-      if(rightShut == 0){
-        if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
-          rightShut = 1;
-          rightdoor.write(90);
-        }
-      }
-    }
+    vTaskDelay(950);
+    leftdoor.write(90);
 
     vTaskDelete(FlashLEDTask);
     setLEDStatus(5);
   }
-  
-  vTaskDelete(NULL);
 }
 
 void setupUltrasonic(){
@@ -425,7 +404,6 @@ void setupUltrasonic(){
 }
 
 void rearCollisionDetection(){
-  // For currently 1 ultrasonic
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
 
@@ -437,11 +415,10 @@ void rearCollisionDetection(){
   // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
   long distanceMeasured = rawPulse / 29 / 2;
   Serial.printf("Distance in cm measured: %d", distanceMeasured);
-  // Will likely need to make a flag for once we are in a station as detected by the IR sensor
 }
 
 void frontCollisionDetection(){
-  if (atStation == 0){
+  if (atStation == 0){ // If we re-adjust the ultrasonic cones then we should be able to safely remove this check
     frontUltraSonic.setMode(RCWL_1X05::triggered);
     frontUltraSonic.trigger();
 
@@ -450,29 +427,34 @@ void frontCollisionDetection(){
     int rawUltraSonicData = frontUltraSonic.read();
     int finalTime = millis();
 
-    if (finalTime - checkTime <= 40){
-      if (rawUltraSonicData <= 250){
+    if (finalTime - checkTime <= 40){ // Logic explanation, if the detection range is outside of 40ms from when we triggered the ultrasonic, we treat it as tho it timed out
+      if (rawUltraSonicData <= 250){ // Currently using a 250mm distance as its the lowest amount it should *safely* discern but this can be revised
+        // TODO: Implement check for time-gap between detections to ensure recency of detections
+        // If the gap between the most recent and the last has surpased 500ms, we clear the last group of detections and consider it 1 again
         detectCount++;
       } 
     }
     
-    // TODO: Implement check for time-gap between detections to ensure recency of detections
     if (checkForStation == 1){
       if (detectCount == 9){
         sendAlertToCCP(0xAB);
-        stop();
+        setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
         detectCount = 0;
       }
     } else {
-      if (detectCount == 3){
+      if (detectCount == 25){
         sendAlertToCCP(0xAB);
-        stop();
+        setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
         detectCount = 0;
       }
     }
-    
   }
-
 }
 
 void checkDoorAlignment(){
@@ -485,6 +467,7 @@ void checkDoorAlignment(){
       stop();
       Serial.println("We are now aligned to a station");
       sendAlertToCCP(0xAA); // AA for Station alignment
+      setLEDStatus(96);
       checkForStation = 0;
       // Insert Code to alert back we are stopped at a station
       atStation = 1;
@@ -493,6 +476,11 @@ void checkDoorAlignment(){
     }
   }
 
+}
+
+void setupBatteryPins(){
+  pinMode(B_SENSE, INPUT);
+  pinMode(FIVE_RAW, INPUT);
 }
 
 // LED Flashes //
@@ -518,7 +506,7 @@ void doorFlashLED(void * parameter){
   }
 }
 
-void DisconnectFlashLED(void * parameter){
+void DisconnectFlashLED(){
   for(;;){
     LEDFlash(0);
     delay(500);
@@ -537,6 +525,7 @@ void stop(){
 }
 
 void forwardSlow(){
+  detectorSelected = 1;
   setLEDStatus(1);
   setMotorDirection(0, 1);
 
@@ -546,6 +535,7 @@ void forwardSlow(){
 }
 
 void forwardFast(){
+  detectorSelected = 1;
   setLEDStatus(2);
 
   setMotorDirection(0,1);
@@ -556,6 +546,7 @@ void forwardFast(){
 }
 
 void reverseSlow(){
+  detectorSelected = -1;
   setLEDStatus(3);
 
   setMotorDirection(0,0);
@@ -565,6 +556,7 @@ void reverseSlow(){
 }
 
 void reverseFast(){
+  detectorSelected = -1;
   setLEDStatus(4);
 
   setMotorDirection(0,0);
@@ -577,14 +569,7 @@ void doorsOpen(){
   int direction = 1;
   checkForStation = 0;
   // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
-  xTaskCreate(
-        doorControl,   
-        "DoorControl",   
-        2048,               
-        &direction,               
-        1,                  
-        &DoorTaskHandle    
-  );
+  doorControl(direction);
 
   
   Serial.println("Doors Open Command");
@@ -593,14 +578,10 @@ void doorsOpen(){
 void doorsClose(){
   int direction = -1;
   checkForStation = 0;
-  xTaskCreate(
-        doorControl,   
-        "DoorControl",    
-        2048,               
-        &direction,           
-        1,                  
-        &DoorTaskHandle    
-  );
+
+  playAudio();
+
+  doorControl(direction);
 
   Serial.println("Doors Close Command");
 }
@@ -618,17 +599,49 @@ void setSlowSpeed(int newSpeed){
 void disconnect(){
   setMotorDirection(1,1); 
   runMotor(0);
+
   disconnected = true;
+  sendAlertToCCP(0xFF);
+
+  WiFi.disconnect(true, true); 
   Serial.print("Awaiting Removal from Track");
-  xTaskCreatePinnedToCore(
-                  DisconnectFlashLED,   /* Task function. */
-                  "DisconnectFlashLED",     /* name of task. */
-                  2048,       /* Stack size of task */
-                  NULL,        /* parameter of the task */
-                  1,           /* priority of the task */
-                  &FlashLEDTask,      /* Task handle to keep track of created task */
-                  0);          /* pin task to core 0 */ 
-  
+  DisconnectFlashLED();
+}
+
+void batteryStatus(){
+  // BSENSE - 0 -> 3.3v proportional to 0 - 12.6v of the battery
+  // 5VRaw - 0 -> 3.3v to 0 - 5v -> Will drop when battery drops (Battery Trigger)
+  // VP, VC -> Not necessary but nice to have
+  // BMS, When BSEnse drops below 9.0v (proportional) -> stop, disconnect, to MCP, then set to DISCONNECT state
+
+  int currBatteryVoltage = analogRead(B_SENSE);
+  double batteryProportionalVoltage = (12.5 / 4096) * currBatteryVoltage;
+
+  int currFiveRailVoltage = analogRead(FIVE_RAW);
+  double fiveRailProportionalVoltage = (5.0 / 4096) * currFiveRailVoltage;
+
+  if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 9.0){
+    sendAlertToCCP(0xFE);
+    setMotorDirection(1,1); 
+    runMotor(0);
+    DisconnectFlashLED();
+  }
+
+  Serial.print("\nBMS - BATTERY VOLTAGE: ");
+  Serial.print(batteryProportionalVoltage);
+
+  Serial.print("\nBMS - FIVE VOLT RAIL: ");
+  Serial.print(fiveRailProportionalVoltage);
+
+}
+
+void playAudio(){
+  DacAudio.FillBuffer();                // Fill the sound buffer with data
+  Serial.println(DacAudio.BufferUsage());
+  Serial.println(doorsCloser.PlayingTime);
+  if(doorsCloser.Playing==false)       // if not playing,
+    DacAudio.Play(&doorsCloser);
+    delay(doorsCloser.PlayingTime);
 }
 
 // CCP Listening //
@@ -669,6 +682,9 @@ void decipherCCPCommand(){
         newSpeed = client.read();
         setFastSpeed(newSpeed);
         break;
+      case 0xEE:
+        playAudio();
+        break;
       case 0xFF:
         disconnect();
         break;
@@ -691,6 +707,7 @@ void decipherCCPCommand(){
 
 void setup() {
   Serial.begin(115200);
+  setupBatteryPins();
   setupMotorPins();
   setMotorDirection(1, 1); // Test reseting the motor direction
   
@@ -706,11 +723,18 @@ void setup() {
 }
 
 void loop() {
+  
+  batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
       // Before we do anytihng, check we aren't going to crash into something
       // May add check that we aren't in station searching mode
-      frontCollisionDetection();
+      if (detectorSelected == 1){
+        frontCollisionDetection();
+      } else if (detectorSelected == -1){
+        //rearCollisionDetection();
+      }
+      
       
       // Check Health Status
       checkNetworkStatus();
@@ -721,6 +745,10 @@ void loop() {
       // Check we aren't now somehow at a station
       // This could be changed to an interrupt event
       checkDoorAlignment();
+    } else {
+      stop();
     }
+  } else {
+    stop();
   }
 }

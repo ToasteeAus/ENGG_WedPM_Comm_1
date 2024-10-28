@@ -281,16 +281,10 @@ def parse_esp_response():
                                 BR_DOOR_OPEN = True 
                             case "06": # All other commands should ensure the door is shut
                                 # Technically this can be called after any command but we'd prefer after a stop
-                                if BR_LAST_CMD == "00":
-                                    logging.debug("BR Door now Closed")
-                                    print("BR Door now Closed")
-                                    CURR_BR_STATUS = BR_STATUS[0]
-                                    send_mcp_msg(create_mcp_stat_msg())
-                                else:
-                                    logging.critical("BR Triggered Door Closed State without Prior Stop state, ERR")
-                                    print("BR Triggered Door Closed State without Prior Stop state, ERR")
-                                    CURR_BR_STATUS = BR_STATUS[5]
-                                    send_mcp_msg(create_mcp_stat_msg())
+                                logging.debug("BR Door now Closed")
+                                print("BR Door now Closed")
+                                CURR_BR_STATUS = BR_STATUS[0]
+                                send_mcp_msg(create_mcp_stat_msg())
                                 BR_DOOR_OPEN = False
                             case _:
                                 logging.critical("BR has returned non-standard but valid command")
@@ -455,36 +449,42 @@ def parse_mcp_response():
                         
                 case "FSLOWC":
                     ESP_SENT_LOCK.acquire()
-                    send_esp_msg(bladeRunnerCommands["FORWARD-SLOW"])
-                    ESP_SENT_Q.put(bladeRunnerCommands["FORWARD-SLOW"])
                     
                     if BR_DOOR_OPEN:
                         send_esp_msg(bladeRunnerCommands["DOORS-CLOSE"])
                         ESP_SENT_Q.put(bladeRunnerCommands["DOORS-CLOSE"])
+                        
+                    send_esp_msg(bladeRunnerCommands["FORWARD-SLOW"])
+                    ESP_SENT_Q.put(bladeRunnerCommands["FORWARD-SLOW"])
+                    
                     ESP_SENT_LOCK.release()
                     
                     send_mcp_msg(create_mcp_akex_msg())
                     
                 case "FFASTC":
                     ESP_SENT_LOCK.acquire()
-                    send_esp_msg(bladeRunnerCommands["FORWARD-FAST"])
-                    ESP_SENT_Q.put(bladeRunnerCommands["FORWARD-FAST"])
                     
                     if BR_DOOR_OPEN:
                         send_esp_msg(bladeRunnerCommands["DOORS-CLOSE"])
                         ESP_SENT_Q.put(bladeRunnerCommands["DOORS-CLOSE"])
+                        
+                    send_esp_msg(bladeRunnerCommands["FORWARD-FAST"])
+                    ESP_SENT_Q.put(bladeRunnerCommands["FORWARD-FAST"])
                     ESP_SENT_LOCK.release()
                     
                     send_mcp_msg(create_mcp_akex_msg())
                     
                 case "RSLOWC":
                     ESP_SENT_LOCK.acquire()
-                    send_esp_msg(bladeRunnerCommands["REVERSE-SLOW"])
-                    ESP_SENT_Q.put(bladeRunnerCommands["REVERSE-SLOW"])
                     
                     if BR_DOOR_OPEN:
                         send_esp_msg(bladeRunnerCommands["DOORS-CLOSE"])
                         ESP_SENT_Q.put(bladeRunnerCommands["DOORS-CLOSE"])
+                        
+                    send_esp_msg(bladeRunnerCommands["REVERSE-SLOW"])
+                    ESP_SENT_Q.put(bladeRunnerCommands["REVERSE-SLOW"])
+                    
+
                     ESP_SENT_LOCK.release()
                     
                     send_mcp_msg(create_mcp_akex_msg())
