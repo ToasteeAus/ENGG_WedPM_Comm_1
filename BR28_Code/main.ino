@@ -3,6 +3,8 @@
 #include <Wire.h>
 #include <RCWL_1X05.h>
 #include <Adafruit_NeoPixel.h>
+#include "XT_DAC_Audio.h"
+#include "SoundData.h"
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
@@ -35,6 +37,11 @@
 #define PIN_NEO_PIXEL 4
 #define NUM_PIXELS 4    // The number of LEDs in sequence
 
+// Audio System
+#define AUDIO_PIN 25
+XT_Wav_Class doorsCloser(doorsClosing);
+XT_DAC_Audio_Class DacAudio(AUDIO_PIN, 0);
+
 // WiFi credentials
 const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
 const char* password = "";
@@ -44,7 +51,7 @@ int wifiReconnecting = 0;
 int ccpReconnecting = 0;
 
 // // Static IP configuration
-IPAddress staticIP(10, 20, 30, 195); // ESP32 static IP
+IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
 IPAddress gateway(10, 20, 30, 250);    // IP Address of your network gateway (router)
 IPAddress subnet(255, 255, 255, 0);   // Subnet mask
 IPAddress primaryDNS(10, 20, 30, 1); // Primary DNS (optional)
@@ -52,11 +59,11 @@ IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
 const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local python server
-const uint16_t ccpPort = 3095;
+const uint16_t ccpPort = 3028;
 
 // Motor Speeds
 int fast_speed = 255;
-int slow_speed = 50;
+int slow_speed = 75;
 
 // Status Checks
 int checkForStation = 0;
@@ -226,8 +233,8 @@ void checkNetworkStatus(){
 // Hardware Functions //
 
 void setupDoorServos(){
-  pinMode(L_DOOR_SENSE_PIN, INPUT_PULLUP);
-  pinMode(R_DOOR_SENSE_PIN, INPUT_PULLUP);
+  pinMode(L_DOOR_SENSE_PIN, INPUT); // HARDWARE PULLUP
+  pinMode(R_DOOR_SENSE_PIN, INPUT);
   leftdoor.attach(L_DOOR_PIN);
   rightdoor.attach(R_DOOR_PIN);
 }
@@ -343,9 +350,9 @@ void setMotorDirection(int disable, int direction){
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW ON PRIOR to V2 BR
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE LOW ON PRIOR to V2 BR
   } else if (direction == 0){
-    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH ON PRIOR TO V2 BR
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE HIGH ON PRIOR TO V2 BR
   }
 
   // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
@@ -361,15 +368,41 @@ void doorControl(int dir)
 
   if (direction == 1)
   { // door open; moves in clockwise direction
-    leftdoor.write(45);
-    delay(950);
+    leftdoor.write(45); // These may be flipped and need to be checked
+    rightdoor.write(135);
+    delay(800); // change this logic later when confirmed working microswitches
     leftdoor.write(90);
+    rightdoor.write(90);
+
+    setLEDStatus(5);
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
-    delay(950);
-    leftdoor.write(90);
+    rightdoor.write(45);
+    int leftShut = 0;
+    int rightShut = 0;
+
+    while(leftShut == 0 or rightShut == 0){
+      if (leftShut == 0){
+        if(digitalRead(L_DOOR_SENSE_PIN) == LOW){ // Hardware Pullup
+          Serial.println("Left Door Shut");
+          delay(1); // debounce
+          leftShut = 1;
+          leftdoor.write(90); // Some values may need to be 95 instead of 90
+        }
+      }
+
+      if(rightShut == 0){
+        if(digitalRead(R_DOOR_SENSE_PIN) == LOW){
+          Serial.println("Right Door Shut");
+          delay(1); // debounce
+          rightShut = 1;
+          rightdoor.write(90);
+        }
+      }
+    }
+    setLEDStatus(5);
   }
 }
 
@@ -377,22 +410,48 @@ void setupUltrasonic(){
   Wire.begin();
   frontUltraSonic.begin();
   frontUltraSonic.setTimeout(40); // 30ms time out for testing, may need to be increased
-  //pinMode(TRIG_PIN, OUTPUT);
-  //pinMode(ECHO_PIN, INPUT);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 }
 
 void rearCollisionDetection(){
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
+  if (atStation == 0){ // If we re-adjust the ultrasonic cones then we should be able to safely remove this check
+    delay(1);
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
 
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
 
-  long rawPulse = pulseIn(ECHO_PIN, HIGH);
-  // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
-  long distanceMeasured = rawPulse / 29 / 2;
-  Serial.printf("Distance in cm measured: %d", distanceMeasured);
+    long rawPulse = pulseIn(ECHO_PIN, HIGH);
+    // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
+    long dist = rawPulse / 29 / 2;
+    Serial.printf("Distance measured in cm: %d", dist); // if pulse is less than or equal to 320
+    if (dist <= 41 && dist >= 2){
+      detectCount++;
+    }
+    
+    if (checkForStation == 1){
+      if (detectCount == 3){
+        sendAlertToCCP(0xAB);
+        setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
+        detectCount = 0;
+      }
+    } else {
+      if (detectCount == 9){
+        sendAlertToCCP(0xAB);
+        setLEDStatus(97);
+        setMotorDirection(1,1); 
+        runMotor(0);
+        checkForStation = 0;
+        detectCount = 0;
+      }
+    }
+  }
 }
 
 void frontCollisionDetection(){
@@ -498,6 +557,7 @@ void stop(){
 
   setMotorDirection(1,1); 
   runMotor(0);
+  detectCount = 0;
   checkForStation = 0;
   Serial.println("Stop Command");
 }
@@ -530,6 +590,7 @@ void reverseSlow(){
   setMotorDirection(0,0);
   runMotor(slow_speed);
   checkForStation = 1;
+  detectCount = 0;
   Serial.println("Reverse Slow Command");
 }
 
@@ -557,6 +618,7 @@ void doorsClose(){
   int direction = -1;
   checkForStation = 0;
 
+  //playAudio();
 
   doorControl(direction);
 
@@ -597,7 +659,7 @@ void batteryStatus(){
   int currFiveRailVoltage = analogRead(FIVE_RAW);
   double fiveRailProportionalVoltage = (5.0 / 4096) * currFiveRailVoltage;
 
-  if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 9.0){
+  if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 7.0){
     sendAlertToCCP(0xFE);
     setMotorDirection(1,1); 
     runMotor(0);
@@ -610,6 +672,15 @@ void batteryStatus(){
   Serial.print("\nBMS - FIVE VOLT RAIL: ");
   Serial.print(fiveRailProportionalVoltage);
 
+}
+
+void playAudio(){
+  DacAudio.FillBuffer();                // Fill the sound buffer with data
+  Serial.println(DacAudio.BufferUsage());
+  Serial.println(doorsCloser.PlayingTime);
+  if(doorsCloser.Playing==false)       // if not playing,
+    DacAudio.Play(&doorsCloser);
+    delay(doorsCloser.PlayingTime);
 }
 
 // CCP Listening //
@@ -650,6 +721,9 @@ void decipherCCPCommand(){
         newSpeed = client.read();
         setFastSpeed(newSpeed);
         break;
+      case 0xEE:
+        playAudio();
+        break;
       case 0xFF:
         disconnect();
         break;
@@ -688,7 +762,7 @@ void setup() {
 }
 
 void loop() {
-  
+  Serial.println(digitalRead(L_DOOR_SENSE_PIN));
   batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
