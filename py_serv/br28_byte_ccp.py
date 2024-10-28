@@ -23,10 +23,10 @@ BR_LAST_CMD = "00"
 RESTART_EXIT = False # Only to be set to True when we need to either RESTART or exit the system
 
 # CCP_PORT ALLOCATION
-CCP_PORT = 3095
+CCP_PORT = 3028
 BUFFER_SIZE = 1024
 RECEIVE_ESP_BUFFER = 2
-CLIENT_ID = "BR95"
+CLIENT_ID = "BR28"
 JAVA_LINE_END = "\r\n"
 
 # ESP Socket Server
