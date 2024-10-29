@@ -31,7 +31,7 @@
 
 // Rear facing ultrasonic
 #define TRIG_PIN 2 // Rear facing Ultrasonic
-#define ECHO_PIN 5 // Rear facing Ultrasonic=
+#define ECHO_PIN 5 // Rear facing Ultrasonic
 
 // Status LEDs
 #define PIN_NEO_PIXEL 4
@@ -49,6 +49,7 @@ const char* password = "";
 // WiFi/Client status ints
 int wifiReconnecting = 0;
 int ccpReconnecting = 0;
+bool disconnected = false;
 
 // // Static IP configuration
 IPAddress staticIP(10, 20, 30, 128); // ESP32 static IP
@@ -62,7 +63,7 @@ const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local 
 const uint16_t ccpPort = 3028;
 
 // Motor Speeds
-int fast_speed = 255;
+int fast_speed = 215;
 int slow_speed = 75;
 
 // Status Checks
@@ -71,7 +72,7 @@ int atStation = 0;
 
 // Collision Detection
 int detectCount = 0;
-int detectorSelected = 1; // 1 for front, -1 for rear
+int detectorSelected = 0; // 1 for front, -1 for rear
 
 // Class Object Constructors
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
@@ -88,31 +89,11 @@ Servo rightdoor;
 // 0x08 - SetFastSpeed ex 0x08 0xFF -> Fast Speed set to 255
 
 // Custom Byte Code Variables //
-
 int newSpeed;
-bool disconnected = false;
 
 // Tasks //
-
 TaskHandle_t FlashLEDTask;
 TaskHandle_t DoorTaskHandle;
-// Helpers //
-
-// This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
-void delayButNotDelay(int delayTimeInMs){
-  // Input "delay" time in ms
-  uint64_t timer = esp_timer_get_time();
-  uint64_t pretime = esp_timer_get_time();
-  uint64_t t = 0;
-
-  while (t != delayTimeInMs){
-    if(timer - pretime >= 1000) { // 1ms
-      t++;
-      pretime = timer;
-    }
-    timer = esp_timer_get_time();
-  }
-}
 
 // WiFi //
 
@@ -411,12 +392,12 @@ void setupUltrasonic(){
   frontUltraSonic.begin();
   frontUltraSonic.setTimeout(40); // 30ms time out for testing, may need to be increased
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  pinMode(ECHO_PIN, INPUT_PULLUP);
 }
 
 void rearCollisionDetection(){
   if (atStation == 0){ // If we re-adjust the ultrasonic cones then we should be able to safely remove this check
-    delay(1);
+    delay(5);
     digitalWrite(TRIG_PIN, LOW);
     delayMicroseconds(2);
 
@@ -424,11 +405,11 @@ void rearCollisionDetection(){
     delayMicroseconds(10);
     digitalWrite(TRIG_PIN, LOW);
 
-    long rawPulse = pulseIn(ECHO_PIN, HIGH);
+    long rawPulse = pulseIn(ECHO_PIN, HIGH, 30000);
     // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
-    long dist = rawPulse / 29 / 2;
+    long dist = (rawPulse / 2) * 0.0343;
     Serial.printf("Distance measured in cm: %d", dist); // if pulse is less than or equal to 320
-    if (dist <= 41 && dist >= 2){
+    if (dist <= 5){ // distances make 0 sense anymore
       detectCount++;
     }
     
@@ -440,6 +421,7 @@ void rearCollisionDetection(){
         runMotor(0);
         checkForStation = 0;
         detectCount = 0;
+        detectorSelected = 0;
       }
     } else {
       if (detectCount == 9){
@@ -449,6 +431,7 @@ void rearCollisionDetection(){
         runMotor(0);
         checkForStation = 0;
         detectCount = 0;
+        detectorSelected = 0;
       }
     }
   }
@@ -480,6 +463,7 @@ void frontCollisionDetection(){
         runMotor(0);
         checkForStation = 0;
         detectCount = 0;
+        detectorSelected = 0;
       }
     } else {
       if (detectCount == 25){
@@ -489,6 +473,7 @@ void frontCollisionDetection(){
         runMotor(0);
         checkForStation = 0;
         detectCount = 0;
+        detectorSelected = 0;
       }
     }
   }
@@ -666,11 +651,11 @@ void batteryStatus(){
     DisconnectFlashLED();
   }
 
-  Serial.print("\nBMS - BATTERY VOLTAGE: ");
-  Serial.print(batteryProportionalVoltage);
+  // Serial.print("\nBMS - BATTERY VOLTAGE: ");
+  // Serial.print(batteryProportionalVoltage);
 
-  Serial.print("\nBMS - FIVE VOLT RAIL: ");
-  Serial.print(fiveRailProportionalVoltage);
+  // Serial.print("\nBMS - FIVE VOLT RAIL: ");
+  // Serial.print(fiveRailProportionalVoltage);
 
 }
 
@@ -762,7 +747,6 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(digitalRead(L_DOOR_SENSE_PIN));
   batteryStatus();
   if (disconnected == false){
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
@@ -771,7 +755,7 @@ void loop() {
       if (detectorSelected == 1){
         frontCollisionDetection();
       } else if (detectorSelected == -1){
-        //rearCollisionDetection();
+        rearCollisionDetection();
       }
       
       
