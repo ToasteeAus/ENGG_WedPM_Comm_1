@@ -3,8 +3,6 @@
 #include <Wire.h>
 #include <RCWL_1X05.h>
 #include <Adafruit_NeoPixel.h>
-#include "XT_DAC_Audio.h"
-#include "SoundData.h"
 
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
@@ -18,9 +16,6 @@
 
 // Door Pin Definitions
 #define R_DOOR_PIN 23
-#define L_DOOR_PIN 27
-#define R_DOOR_SENSE_PIN 35
-#define L_DOOR_SENSE_PIN 34
 #define IR_DOOR_ALIGN_PIN 18
 
 // Power Management System Pin Definitions
@@ -29,18 +24,9 @@
 // VP, VC -> Not necessary but nice to have
 // BMS, When BSEnse drops below 9.6v (proportional) -> stop, disconnect, to MCP, then set to DISCONNECT state
 
-// Rear facing ultrasonic
-#define TRIG_PIN 2 // Rear facing Ultrasonic
-#define ECHO_PIN 5 // Rear facing Ultrasonic=
-
 // Status LEDs
 #define PIN_NEO_PIXEL 4
 #define NUM_PIXELS 4    // The number of LEDs in sequence
-
-// Audio System
-#define AUDIO_PIN 25
-XT_Wav_Class doorsCloser(doorsClosing);
-XT_DAC_Audio_Class DacAudio(AUDIO_PIN, 0);
 
 // WiFi credentials
 const char* ssid     = "ENGG2K3K"; // Replace with LAN name and pass
@@ -77,7 +63,6 @@ int detectorSelected = 1; // 1 for front, -1 for rear
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
 RCWL_1X05 frontUltraSonic;
 WiFiClient client;
-Servo leftdoor;
 Servo rightdoor;
 
 // 0x00 - STOP, 0x01 - FORWARD, SLOW, 0x02 - FORWARD, FAST, 0x03 - REVERSE, SLOW, 
@@ -96,23 +81,6 @@ bool disconnected = false;
 
 TaskHandle_t FlashLEDTask;
 TaskHandle_t DoorTaskHandle;
-// Helpers //
-
-// This may or may not work, i have honestly no idea (the logic works, no clue with a live ESP tho)
-void delayButNotDelay(int delayTimeInMs){
-  // Input "delay" time in ms
-  uint64_t timer = esp_timer_get_time();
-  uint64_t pretime = esp_timer_get_time();
-  uint64_t t = 0;
-
-  while (t != delayTimeInMs){
-    if(timer - pretime >= 1000) { // 1ms
-      t++;
-      pretime = timer;
-    }
-    timer = esp_timer_get_time();
-  }
-}
 
 // WiFi //
 
@@ -233,9 +201,6 @@ void checkNetworkStatus(){
 // Hardware Functions //
 
 void setupDoorServos(){
-  pinMode(L_DOOR_SENSE_PIN, INPUT_PULLUP);
-  pinMode(R_DOOR_SENSE_PIN, INPUT_PULLUP);
-  leftdoor.attach(L_DOOR_PIN);
   rightdoor.attach(R_DOOR_PIN);
 }
 
@@ -368,15 +333,15 @@ void doorControl(int dir)
 
   if (direction == 1)
   { // door open; moves in clockwise direction
-    leftdoor.write(45);
+    rightdoor.write(45);
     delay(950);
-    leftdoor.write(90);
+    rightdoor.write(90);
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
-    leftdoor.write(135);
+    rightdoor.write(135);
     delay(950);
-    leftdoor.write(90);
+    rightdoor.write(90);
   }
 }
 
@@ -384,22 +349,6 @@ void setupUltrasonic(){
   Wire.begin();
   frontUltraSonic.begin();
   frontUltraSonic.setTimeout(40); // 30ms time out for testing, may need to be increased
-  //pinMode(TRIG_PIN, OUTPUT);
-  //pinMode(ECHO_PIN, INPUT);
-}
-
-void rearCollisionDetection(){
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long rawPulse = pulseIn(ECHO_PIN, HIGH);
-  // 29 microseconds per centimeter at the speed of sound, divided by half of the distance travelled
-  long distanceMeasured = rawPulse / 29 / 2;
-  Serial.printf("Distance in cm measured: %d", distanceMeasured);
 }
 
 void frontCollisionDetection(){
@@ -454,8 +403,8 @@ void checkDoorAlignment(){
       sendAlertToCCP(0xAA); // AA for Station alignment
       setLEDStatus(96);
       checkForStation = 0;
-      // Insert Code to alert back we are stopped at a station
       atStation = 1;
+      detectorSelected = 0;
     } else {
       Serial.println("We aren't at a station");
     }
@@ -553,10 +502,8 @@ void reverseFast(){
 void doorsOpen(){
   int direction = 1;
   checkForStation = 0;
-  // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
-  doorControl(direction);
 
-  
+  doorControl(direction);
   Serial.println("Doors Open Command");
 }
 
@@ -564,10 +511,7 @@ void doorsClose(){
   int direction = -1;
   checkForStation = 0;
 
-  //playAudio();
-
   doorControl(direction);
-
   Serial.println("Doors Close Command");
 }
 
@@ -620,15 +564,6 @@ void batteryStatus(){
 
 }
 
-void playAudio(){
-  DacAudio.FillBuffer();                // Fill the sound buffer with data
-  Serial.println(DacAudio.BufferUsage());
-  Serial.println(doorsCloser.PlayingTime);
-  if(doorsCloser.Playing==false)       // if not playing,
-    DacAudio.Play(&doorsCloser);
-    delay(doorsCloser.PlayingTime);
-}
-
 // CCP Listening //
 
 void decipherCCPCommand(){
@@ -666,9 +601,6 @@ void decipherCCPCommand(){
         while(!client.available()){}
         newSpeed = client.read();
         setFastSpeed(newSpeed);
-        break;
-      case 0xEE:
-        playAudio();
         break;
       case 0xFF:
         disconnect();
@@ -716,10 +648,7 @@ void loop() {
       // May add check that we aren't in station searching mode
       if (detectorSelected == 1){
         frontCollisionDetection();
-      } else if (detectorSelected == -1){
-        //rearCollisionDetection();
       }
-      
       
       // Check Health Status
       checkNetworkStatus();
