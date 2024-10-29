@@ -48,8 +48,11 @@ const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local 
 const uint16_t ccpPort = 3095;
 
 // Motor Speeds
-int fast_speed = 215;
-int slow_speed = 75;
+const int fast_speed = 225; // Ensure speeds are set such that if divided by our speed_interval, they return ints not doubles
+const int slow_speed = 75;
+int target_speed = 0;
+int curr_speed = 0;
+int speed_interval = 25;
 
 // Status Checks
 int checkForStation = 0;
@@ -96,7 +99,7 @@ void wifiEventListener(WiFiEvent_t event){
       case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
           Serial.println("WiFi: Disconnected from ENGG2K3K Network, Attempting to reconnect\n");
           setMotorDirection(1,1); 
-          runMotor(0);
+          runMotor(0); // Yet another exception for safety, if we disconnect from the WiFi something has gone horribly wrong
           // stop without our funny lil LEDs
 
           WiFi.begin(ssid, password);
@@ -327,22 +330,47 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
+void doorControlDelayFlash(){
+  LEDFlash(6);
+  delay(500);
+  LEDFlash(6);
+  delay(450);
+}
+
 void doorControl(int dir)
 {
-  int direction = dir;
+  // xTask is a backup possible solution for the door Flashing code in case our delay one is causing too many hiccups down the line with the rest of our system
+  // But this shouldn't impact too much as this only occurs when STOPPED and AT STATION so we shouldnt see it impact nominal ops
+  // xTaskCreate(
+  //     doorFlashLED,   
+  //     "DoorFlashLED",    
+  //     2048,               
+  //     NULL,           
+  //     1,                  
+  //     &FlashLEDTask    
+  // );
 
-  if (direction == 1)
+  if (dir == 1)
   { // door open; moves in clockwise direction
     leftdoor.write(45);
-    delay(950);
+    //delay(950);
+    doorControlDelayFlash();
     leftdoor.write(90);
+    //vTaskDelete(FlashLEDTask);
+    setLEDStatus(5);
   }
-  else if (direction == -1)
+  else if (dir == -1)
   { // door close; moves in anticlockwise direction
     leftdoor.write(135);
-    delay(950);
+    //delay(950);
+    doorControlDelayFlash();
     leftdoor.write(90);
+    //vTaskDelete(FlashLEDTask);
+    setLEDStatus(6);
   }
+
+  // Just in case it wasn't deleted:
+  //vTaskDelete(FlashLEDTask);
 }
 
 void setupUltrasonic(){
@@ -374,7 +402,7 @@ void frontCollisionDetection(){
         sendAlertToCCP(0xAB);
         setLEDStatus(97);
         setMotorDirection(1,1); 
-        runMotor(0);
+        runMotor(0); // Safety based exceptions
         checkForStation = 0;
         detectCount = 0;
       }
@@ -453,7 +481,7 @@ void stop(){
   setLEDStatus(0);
 
   setMotorDirection(1,1); 
-  runMotor(0);
+  set_target_speed(0);
   checkForStation = 0;
   Serial.println("Stop Command");
 }
@@ -463,7 +491,7 @@ void forwardSlow(){
   setLEDStatus(1);
   setMotorDirection(0, 1);
 
-  runMotor(slow_speed);
+  set_target_speed(slow_speed);
   checkForStation = 1;
   Serial.println("Forward Slow Command");
 }
@@ -473,7 +501,7 @@ void forwardFast(){
   setLEDStatus(2);
 
   setMotorDirection(0,1);
-  runMotor(fast_speed);
+  set_target_speed(fast_speed);
   checkForStation = 0;
   atStation = 0;
   Serial.println("Forward Fast Command");
@@ -484,7 +512,7 @@ void reverseSlow(){
   setLEDStatus(3);
 
   setMotorDirection(0,0);
-  runMotor(slow_speed);
+  set_target_speed(slow_speed);
   checkForStation = 1;
   Serial.println("Reverse Slow Command");
 }
@@ -494,7 +522,7 @@ void reverseFast(){
   setLEDStatus(4);
 
   setMotorDirection(0,0);
-  runMotor(fast_speed);
+  set_target_speed(fast_speed);
   checkForStation = 0;
   Serial.println("Reverse Fast Command");
 }
@@ -527,7 +555,7 @@ void setSlowSpeed(int newSpeed){
 
 void disconnect(){
   setMotorDirection(1,1); 
-  runMotor(0);
+  runMotor(0); // Exception to the rule, if we are in disconnect, all bets are off, do not roll forward
 
   disconnected = true;
   sendAlertToCCP(0xFF);
@@ -552,7 +580,7 @@ void batteryStatus(){
   if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 9.0){
     sendAlertToCCP(0xFE);
     setMotorDirection(1,1); 
-    runMotor(0);
+    runMotor(0); // Another exception, if the battery is dying we just need to stop everything pronto
     DisconnectFlashLED();
   }
 
@@ -562,6 +590,26 @@ void batteryStatus(){
   Serial.print("\nBMS - FIVE VOLT RAIL: ");
   Serial.print(fiveRailProportionalVoltage);
 
+}
+
+void set_target_speed(int newSpeed){
+  target_speed = newSpeed;
+}
+
+void drive_motor(){
+  if (curr_speed != target_speed){
+    int temp_speed;
+    
+    if (target_speed < curr_speed){
+      temp_speed = curr_speed - speed_interval;
+    } else if (target_speed > curr_speed){
+      temp_speed = curr_speed + speed_interval;
+    }
+
+    temp_speed = constrain(temp_speed, 0, fast_speed);
+    runMotor(temp_speed);
+    curr_speed = temp_speed;
+  }
 }
 
 // CCP Listening //
@@ -652,6 +700,9 @@ void loop() {
       
       // Check Health Status
       checkNetworkStatus();
+
+      // Drive our Motors to check or meet the newest speed - important to do this after collision detection in case of positive hit
+      drive_motor();
 
       // Execute Commands Received
       decipherCCPCommand();
