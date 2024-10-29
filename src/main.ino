@@ -6,6 +6,8 @@
 #include "XT_DAC_Audio.h"
 #include "SoundData.h"
 
+
+// TODO: FIX STATUS LEDS WHEN DOORS CLOSING AND OPENING + RE-ADD FLASH FOR FLARE
 /*
   CRITICAL NOTE: DO NOT SEND PRINTLN COMMANDS TO PYTHON SERVER, IT HAS A FIT <3
   Remove all Serial statements when we produce the production variant of this code with all systems operational

@@ -15,7 +15,7 @@
 #define PWM_PIN 12
 
 // Door Pin Definitions
-#define R_DOOR_PIN 23
+#define L_DOOR_PIN 23
 #define IR_DOOR_ALIGN_PIN 18
 
 // Power Management System Pin Definitions
@@ -48,8 +48,8 @@ const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local 
 const uint16_t ccpPort = 3095;
 
 // Motor Speeds
-int fast_speed = 255;
-int slow_speed = 50;
+int fast_speed = 215;
+int slow_speed = 75;
 
 // Status Checks
 int checkForStation = 0;
@@ -63,7 +63,7 @@ int detectorSelected = 1; // 1 for front, -1 for rear
 Adafruit_NeoPixel NeoPixel(NUM_PIXELS, PIN_NEO_PIXEL, NEO_GRB + NEO_KHZ800);
 RCWL_1X05 frontUltraSonic;
 WiFiClient client;
-Servo rightdoor;
+Servo leftdoor;
 
 // 0x00 - STOP, 0x01 - FORWARD, SLOW, 0x02 - FORWARD, FAST, 0x03 - REVERSE, SLOW, 
 // 0x04 - REVERSE, FAST, 0x05 - DOORS, OPEN, 0x06 - DOORS, CLOSE
@@ -201,7 +201,7 @@ void checkNetworkStatus(){
 // Hardware Functions //
 
 void setupDoorServos(){
-  rightdoor.attach(R_DOOR_PIN);
+  leftdoor.attach(L_DOOR_PIN);
 }
 
 void setupLEDS(){
@@ -315,9 +315,9 @@ void setMotorDirection(int disable, int direction){
   }
 
   if(direction == 1){
-    digitalWrite(DIR_PIN, LOW); // SHOULD BE LOW ON PRIOR to V2 BR
+    digitalWrite(DIR_PIN, HIGH); // SHOULD BE LOW ON PRIOR to V2 BR
   } else if (direction == 0){
-    digitalWrite(DIR_PIN, HIGH); // SHOULD BE HIGH ON PRIOR TO V2 BR
+    digitalWrite(DIR_PIN, LOW); // SHOULD BE HIGH ON PRIOR TO V2 BR
   }
 
   // THE ABOVE IS FLIPPED DUE TO A POLARITY MISMATCH ON THE CURRENT MODEL
@@ -333,15 +333,15 @@ void doorControl(int dir)
 
   if (direction == 1)
   { // door open; moves in clockwise direction
-    rightdoor.write(45);
+    leftdoor.write(45);
     delay(950);
-    rightdoor.write(90);
+    leftdoor.write(90);
   }
   else if (direction == -1)
   { // door close; moves in anticlockwise direction
-    rightdoor.write(135);
+    leftdoor.write(135);
     delay(950);
-    rightdoor.write(90);
+    leftdoor.write(90);
   }
 }
 
