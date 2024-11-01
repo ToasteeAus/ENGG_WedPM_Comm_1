@@ -45,14 +45,14 @@ IPAddress secondaryDNS(0, 0, 0, 0);   // Secondary DNS (optional)
 
 // Server address and port
 const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local python server
-const uint16_t ccpPort = 3095;
+const uint16_t ccpPort = 3009;
 
 // Motor Speeds
 const int fast_speed = 225; // Ensure speeds are set such that if divided by our speed_interval, they return ints not doubles
 const int slow_speed = 75;
 int target_speed = 0;
 int curr_speed = 0;
-int speed_interval = 25;
+int speed_interval = 5;
 
 // Status Checks
 int checkForStation = 0;
