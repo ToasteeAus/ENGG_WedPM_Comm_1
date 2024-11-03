@@ -11,7 +11,7 @@ int fast_speed = 225;
 int slow_speed = 75;
 int target_speed = 0;
 int curr_speed = 0;
-int speed_interval = 25;
+int speed_interval = 5;
 
 // Test Check
 int has_test_started = 0;
