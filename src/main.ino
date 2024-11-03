@@ -66,7 +66,7 @@ const uint16_t ccpPort = 3028;
 
 // Motor Speeds
 const int fast_speed = 255; // Ensure speeds are set such that if divided by our speed_interval, they return ints not doubles
-const int slow_speed = 100;
+const int slow_speed = 75;
 int target_speed = 0;
 int curr_speed = 0;
 int speed_interval = 5;
@@ -476,7 +476,7 @@ void frontCollisionDetection(){
         // TODO: Implement check for time-gap between detections to ensure recency of detections
         // If the gap between the most recent and the last has surpased 500ms, we clear the last group of detections and consider it 1 again
         detectCount++;
-      }
+      } 
     }
     
     if (checkForStation == 1){
@@ -485,18 +485,16 @@ void frontCollisionDetection(){
         setLEDStatus(97);
         setMotorDirection(1,1); 
         runMotor(0);
-        target_speed = 0;
         checkForStation = 0;
         detectCount = 0;
         detectorSelected = 0;
       }
     } else {
-      if (detectCount == 35){
+      if (detectCount == 20){
         sendAlertToCCP(0xAB);
         setLEDStatus(97);
         setMotorDirection(1,1); 
         runMotor(0);
-        target_speed = 0;
         checkForStation = 0;
         detectCount = 0;
         detectorSelected = 0;
@@ -603,10 +601,6 @@ void reverseSlow(){
   setLEDStatus(3);
 
   setMotorDirection(0,0);
-  if (curr_speed == 0){
-    curr_speed = 25;
-  }
-  
   set_target_speed(slow_speed);
   checkForStation = 1;
   Serial.println("Reverse Slow Command");
@@ -618,9 +612,6 @@ void reverseFast(){
   setLEDStatus(4);
 
   setMotorDirection(0,0);
-  if (curr_speed == 0){
-    curr_speed = 25;
-  }
   set_target_speed(fast_speed);
   checkForStation = 0;
   Serial.println("Reverse Fast Command");
@@ -804,11 +795,11 @@ void loop() {
     if (wifiReconnecting == 0 and ccpReconnecting == 0){
       // Before we do anytihng, check we aren't going to crash into something
       // May add check that we aren't in station searching mode
-      // if (detectorSelected == 1){
-      //   frontCollisionDetection();
-      // } else if (detectorSelected == -1){
-      //   //rearCollisionDetection();
-      // }
+      if (detectorSelected == 1){
+        frontCollisionDetection();
+      } else if (detectorSelected == -1){
+        rearCollisionDetection();
+      }
       
       // Check Health Status
       checkNetworkStatus();
