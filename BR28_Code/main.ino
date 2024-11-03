@@ -65,8 +65,11 @@ const char* ccpIP = "10.20.30.1";  // Replace with the IP address of your local 
 const uint16_t ccpPort = 3028;
 
 // Motor Speeds
-int fast_speed = 215;
-int slow_speed = 75;
+const int fast_speed = 255; // Ensure speeds are set such that if divided by our speed_interval, they return ints not doubles
+const int slow_speed = 75;
+int target_speed = 0;
+int curr_speed = 0;
+int speed_interval = 5;
 
 // Status Checks
 int checkForStation = 0;
@@ -345,22 +348,38 @@ void runMotor(int speed){
   analogWrite(PWM_PIN, speed);
 }
 
+void doorControlDelayFlash(){
+  LEDFlash(6);
+  delay(500);
+  LEDFlash(6);
+  delay(430);
+}
+
 void doorControl(int dir)
 {
-  int direction = dir;
-
-  if (direction == 1)
+  // xTask is a backup possible solution for the door Flashing code in case our delay one is causing too many hiccups down the line with the rest of our system
+  // But this shouldn't impact too much as this only occurs when STOPPED and AT STATION so we shouldnt see it impact nominal ops
+  
+  if (dir == 1)
   { // door open; moves in clockwise direction
-    leftdoor.write(45); // These may be flipped and need to be checked
+    leftdoor.write(45);
     rightdoor.write(135);
-    delay(800); // change this logic later when confirmed working microswitches
+    doorControlDelayFlash();
     leftdoor.write(90);
     rightdoor.write(90);
-
     setLEDStatus(5);
   }
-  else if (direction == -1)
+  else if (dir == -1)
   { // door close; moves in anticlockwise direction
+    xTaskCreate(
+      doorFlashLED,   
+      "DoorFlashLED",    
+      2048,               
+      NULL,           
+      1,                  
+      &FlashLEDTask    
+    );
+
     leftdoor.write(135);
     rightdoor.write(45);
     int leftShut = 0;
@@ -385,8 +404,11 @@ void doorControl(int dir)
         }
       }
     }
-    setLEDStatus(5);
+    vTaskDelete(FlashLEDTask);
+    setLEDStatus(6);
   }
+
+  // Just in case it wasn't deleted:
 }
 
 void setupUltrasonic(){
@@ -468,7 +490,7 @@ void frontCollisionDetection(){
         detectorSelected = 0;
       }
     } else {
-      if (detectCount == 25){
+      if (detectCount == 20){
         sendAlertToCCP(0xAB);
         setLEDStatus(97);
         setMotorDirection(1,1); 
@@ -488,7 +510,8 @@ void checkDoorAlignment(){
 
     if (currIRVal == LOW){
       delay(150);
-      stop();
+      //stop();
+      runMotor(0); // Let's immediately stop on alignment
       Serial.println("We are now aligned to a station");
       sendAlertToCCP(0xAA); // AA for Station alignment
       setLEDStatus(96);
@@ -541,30 +564,32 @@ void DisconnectFlashLED(){
 
 void stop(){
   setLEDStatus(0);
+  detectCount = 0;
 
   setMotorDirection(1,1); 
-  runMotor(0);
-  detectCount = 0;
+  set_target_speed(0);
   checkForStation = 0;
   Serial.println("Stop Command");
 }
 
 void forwardSlow(){
   detectorSelected = 1;
+  detectCount = 0;
   setLEDStatus(1);
   setMotorDirection(0, 1);
 
-  runMotor(slow_speed);
+  set_target_speed(slow_speed);
   checkForStation = 1;
   Serial.println("Forward Slow Command");
 }
 
 void forwardFast(){
   detectorSelected = 1;
+  detectCount = 0;
   setLEDStatus(2);
 
   setMotorDirection(0,1);
-  runMotor(fast_speed);
+  set_target_speed(fast_speed);
   checkForStation = 0;
   atStation = 0;
   Serial.println("Forward Fast Command");
@@ -572,21 +597,22 @@ void forwardFast(){
 
 void reverseSlow(){
   detectorSelected = -1;
+  detectCount = 0;
   setLEDStatus(3);
 
   setMotorDirection(0,0);
-  runMotor(slow_speed);
+  set_target_speed(slow_speed);
   checkForStation = 1;
-  detectCount = 0;
   Serial.println("Reverse Slow Command");
 }
 
 void reverseFast(){
   detectorSelected = -1;
+  detectCount = 0;
   setLEDStatus(4);
 
   setMotorDirection(0,0);
-  runMotor(fast_speed);
+  set_target_speed(fast_speed);
   checkForStation = 0;
   Serial.println("Reverse Fast Command");
 }
@@ -594,10 +620,8 @@ void reverseFast(){
 void doorsOpen(){
   int direction = 1;
   checkForStation = 0;
-  // Currently these functions, "work" but Servos have not been ensured to still be behaving properly
-  doorControl(direction);
 
-  
+  doorControl(direction);
   Serial.println("Doors Open Command");
 }
 
@@ -605,10 +629,7 @@ void doorsClose(){
   int direction = -1;
   checkForStation = 0;
 
-  //playAudio();
-
   doorControl(direction);
-
   Serial.println("Doors Close Command");
 }
 
@@ -624,7 +645,7 @@ void setSlowSpeed(int newSpeed){
 
 void disconnect(){
   setMotorDirection(1,1); 
-  runMotor(0);
+  runMotor(0); // Exception to the rule, if we are in disconnect, all bets are off, do not roll forward
 
   disconnected = true;
   sendAlertToCCP(0xFF);
@@ -646,19 +667,39 @@ void batteryStatus(){
   int currFiveRailVoltage = analogRead(FIVE_RAW);
   double fiveRailProportionalVoltage = (5.0 / 4096) * currFiveRailVoltage;
 
-  if(fiveRailProportionalVoltage <= 4.9 || batteryProportionalVoltage <= 7.0){
+  if(fiveRailProportionalVoltage <= 3.9 || batteryProportionalVoltage <= 5.0){ // fiveRailProportionalVoltage <= 4.9 ||
     sendAlertToCCP(0xFE);
     setMotorDirection(1,1); 
     runMotor(0);
     DisconnectFlashLED();
   }
 
-  // Serial.print("\nBMS - BATTERY VOLTAGE: ");
-  // Serial.print(batteryProportionalVoltage);
+  Serial.print("\nBMS - BATTERY VOLTAGE: ");
+  Serial.print(batteryProportionalVoltage);
 
-  // Serial.print("\nBMS - FIVE VOLT RAIL: ");
-  // Serial.print(fiveRailProportionalVoltage);
+  Serial.print("\nBMS - FIVE VOLT RAIL: ");
+  Serial.print(fiveRailProportionalVoltage);
 
+}
+
+void set_target_speed(int newSpeed){
+  target_speed = newSpeed;
+}
+
+void drive_motor(){
+  if (curr_speed != target_speed){
+    int temp_speed;
+    
+    if (target_speed < curr_speed){
+      temp_speed = curr_speed - speed_interval;
+    } else if (target_speed > curr_speed){
+      temp_speed = curr_speed + speed_interval;
+    }
+
+    temp_speed = constrain(temp_speed, 0, fast_speed);
+    runMotor(temp_speed);
+    curr_speed = temp_speed;
+  }
 }
 
 void playAudio(){
@@ -760,9 +801,11 @@ void loop() {
         rearCollisionDetection();
       }
       
-      
       // Check Health Status
       checkNetworkStatus();
+
+      // Drive our Motors to check or meet the newest speed - important to do this after collision detection in case of positive hit
+      drive_motor();
 
       // Execute Commands Received
       decipherCCPCommand();
